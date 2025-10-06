@@ -1,11 +1,16 @@
-import { CodebaseContext } from '../types/index.js';
-import { readProjectStructure, readPackageJson, readFiles } from './reader.js';
+import { CodebaseContext, FileInfo } from '../types/index.js';
+import { readProjectStructure, readPackageJson } from './reader.js';
 import { detectFramework, detectLanguage } from './analyzer.js';
 import { logger } from '../utils/logger.js';
-import { glob } from 'glob';
 import chalk from 'chalk';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 
-export async function gatherContext(projectRoot: string, _task: string): Promise<CodebaseContext> {
+export async function gatherContext(
+  projectRoot: string,
+  _task: string,
+  mentionedFiles: string[] = []
+): Promise<CodebaseContext> {
   console.log(chalk.bold.cyan('\n🔍 Analyzing Codebase\n'));
 
   const fileTree = await readProjectStructure(projectRoot);
@@ -27,11 +32,28 @@ export async function gatherContext(projectRoot: string, _task: string): Promise
   console.log(chalk.gray(`  Framework: ${framework || 'None'}`));
   console.log(chalk.gray(`  Dependencies: ${dependencies.length} packages`));
 
-  // Get relevant source files
-  const relevantFilePaths = await getRelevantFiles(projectRoot);
-  const relevantFiles = await readFiles(relevantFilePaths);
+  // Read only @-mentioned files upfront if provided
+  const relevantFiles: FileInfo[] = [];
+  if (mentionedFiles.length > 0) {
+    console.log(chalk.blue(`\n📎 Reading ${mentionedFiles.length} mentioned file(s)...\n`));
+    for (const filePath of mentionedFiles) {
+      try {
+        const absolutePath = join(projectRoot, filePath);
+        const content = await readFile(absolutePath, 'utf-8');
+        const stats = await import('fs/promises').then(fs => fs.stat(absolutePath));
+        relevantFiles.push({
+          path: filePath,
+          content,
+          size: stats.size
+        });
+        console.log(chalk.gray(`  ✓ ${filePath}`));
+      } catch (error) {
+        logger.error(`Failed to read mentioned file ${filePath}:`, error);
+      }
+    }
+  }
 
-  logger.success('Context gathering complete\n');
+  logger.success('Initial context gathering complete\n');
 
   return {
     projectRoot,
@@ -41,37 +63,4 @@ export async function gatherContext(projectRoot: string, _task: string): Promise
     fileTree,
     relevantFiles
   };
-}
-
-async function getRelevantFiles(projectRoot: string): Promise<string[]> {
-  try {
-    // Focus on key source files
-    const patterns = [
-      'src/**/*.{ts,js,tsx,jsx}',
-      'pages/**/*.{ts,js,tsx,jsx}',
-      'app/**/*.{ts,js,tsx,jsx}',
-      'routes/**/*.{ts,js}',
-      'index.{ts,js}',
-      'server.{ts,js}',
-      'package.json',
-      'tsconfig.json'
-    ];
-
-    const files: string[] = [];
-
-    for (const pattern of patterns) {
-      const matches = await glob(pattern, {
-        cwd: projectRoot,
-        ignore: ['node_modules/**', 'dist/**', '.git/**', '**/*.test.*', '**/*.spec.*'],
-        absolute: true
-      });
-      files.push(...matches);
-    }
-
-    // Limit to avoid overwhelming context
-    return [...new Set(files)].slice(0, 20);
-  } catch (error) {
-    logger.error('Error getting relevant files:', error);
-    return [];
-  }
 }

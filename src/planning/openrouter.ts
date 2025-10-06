@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import ora from 'ora';
@@ -91,6 +92,31 @@ export async function callOpenRouter(
 
     spinner.fail('AI request failed');
     logger.error('OpenRouter API error:', error.message || error);
+    throw error;
+  }
+}
+
+export async function callOpenRouterWithTools(
+  messages: ChatCompletionMessageParam[],
+  tools: ChatCompletionTool[],
+  model: string = 'x-ai/grok-code-fast-1'
+): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+  try {
+    logger.debug(`Calling OpenRouter with tools. Model: ${model}`);
+
+    const completion = await openai.chat.completions.create({
+      model,
+      messages,
+      tools,
+      tool_choice: 'auto',
+      temperature: 0.7,
+      max_tokens: 4000
+    });
+
+    logger.debug(`Tool call response received. Finish reason: ${completion.choices[0]?.finish_reason}`);
+    return completion;
+  } catch (error: any) {
+    logger.error('OpenRouter tool call error:', error.message || error);
     throw error;
   }
 }

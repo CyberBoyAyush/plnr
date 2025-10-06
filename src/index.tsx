@@ -9,9 +9,7 @@ import { displayPlan, displaySuccess, displayError, displayInfo } from './cli/ou
 import { Plan, CodebaseContext } from './types/index.js';
 import chalk from 'chalk';
 import { glob } from 'glob';
-import * as path from 'path';
 import Fuse from 'fuse.js';
-import * as fs from 'fs/promises';
 import { getInteractiveInput } from './cli/interactive-input.js';
 
 const program = new Command();
@@ -93,21 +91,9 @@ program
             continue;
           }
 
-        // Extract @mentioned files and read their content
+        // Extract @mentioned files
         const fileMatches = input.match(/@([\w\/.\\-]+)/g);
-        let mentionedFilesContent = '';
-        if (fileMatches) {
-          const files = fileMatches.map(m => m.substring(1));
-          for (const file of files) {
-            const filePath = path.join(projectRoot, file);
-            try {
-              const content = await fs.readFile(filePath, 'utf-8');
-              mentionedFilesContent += `\n\n## File: ${file}\n\`\`\`\n${content}\n\`\`\``;
-            } catch (error) {
-              console.log(chalk.yellow(`Warning: Could not read file ${file}`));
-            }
-          }
-        }
+        const mentionedFiles = fileMatches ? fileMatches.map(m => m.substring(1)) : [];
 
         // Handle exit
         if (input === '/exit' || input === '/quit') {
@@ -211,18 +197,13 @@ program
             displayInfo(`Generating plan based on previous context...`);
           }
 
-          // Append mentioned files content to task
-          if (mentionedFilesContent) {
-            task += mentionedFilesContent;
-          }
-
           try {
             currentTask = task;
             console.log('');
 
             // Step 1: Gather context (only first time or if needed)
             if (!context) {
-              context = await gatherContext(projectRoot, task);
+              context = await gatherContext(projectRoot, task, mentionedFiles);
             }
 
             // Step 2: Generate plan with conversation history
@@ -250,22 +231,16 @@ program
         try {
           console.log('');
 
-          // Append mentioned files content to input
-          let chatInput = input;
-          if (mentionedFilesContent) {
-            chatInput += mentionedFilesContent;
-          }
-
           // Step 1: Gather context (only first time)
           if (!context) {
-            context = await gatherContext(projectRoot, chatInput);
+            context = await gatherContext(projectRoot, input, mentionedFiles);
           }
 
           // Step 2: Generate conversational response
-          const response = await generatePlan(context, chatInput, conversationHistory, false);
+          const response = await generatePlan(context, input, conversationHistory, false);
 
           // Add to history
-          conversationHistory.push({ task: chatInput, plan: response });
+          conversationHistory.push({ task: input, plan: response });
 
           // Step 3: Display results
           console.log('\n');
