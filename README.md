@@ -1,10 +1,12 @@
-# ContextEngine
+# plnr - Plan Before Implementation
 
-AI-powered planning layer for coding agents like Claude Code and Cursor.
+> AI-powered planning tool for your codebase
 
-## What is ContextEngine?
+## What is plnr?
 
-ContextEngine analyzes your codebase, understands its structure, and generates detailed implementation plans for new features or changes. It's designed to work seamlessly with AI coding assistants by providing them with rich context and structured plans.
+plnr analyzes your codebase, understands its structure, and generates detailed implementation plans for new features or changes. It's designed to work seamlessly with AI coding assistants by providing them with rich context and structured plans.
+
+**Plan before implementation** - Make better decisions with AI-powered planning.
 
 ## Features
 
@@ -27,13 +29,13 @@ ContextEngine analyzes your codebase, understands its structure, and generates d
 ### Global Installation
 
 ```bash
-cd /path/to/contextengine
+cd /path/to/plnr
 pnpm install
 pnpm build
 pnpm link --global
 ```
 
-Now you can use `cengine` from anywhere!
+Now you can use `plnr` from anywhere!
 
 ## Setup
 
@@ -54,21 +56,23 @@ Get your API key from [OpenRouter](https://openrouter.ai/)
 ### Interactive Mode
 
 ```bash
-cengine
+plnr
 ```
 
 This launches an interactive UI where you can:
-1. Enter your task description
-2. View the generated plan
-3. Export as PRD or integrate with Claude Code
+1. Chat about your codebase
+2. Generate implementation plans with `/plan`
+3. Export as PRD with `/export`
+4. Hand off to Claude Code with `/cc`
 
-### Quick Plan Mode
+### Commands
 
-```bash
-cengine plan "add user authentication with JWT"
-```
-
-This generates a plan and displays it in the terminal.
+- `/plan [task]` - Generate an implementation plan
+- `/export` - Export plan as markdown
+- `/cc` - Launch Claude Code with context
+- `/clear` - Clear conversation
+- `/help` - Show help
+- `/exit` - Exit plnr
 
 ## Development
 
@@ -89,39 +93,35 @@ pnpm build
 Link the package globally and test in any project:
 
 ```bash
-# In contextengine directory
+# In plnr directory
 pnpm link --global
 
 # Navigate to any project
 cd ~/your-project
-cengine plan "your task"
+plnr
 
 # Unlink when done
 pnpm unlink --global
 ```
 
-## Testing on External Projects
+## Example Workflow
 
-1. **Build and link** the tool:
 ```bash
-cd /path/to/contextengine
-pnpm build
-pnpm link --global
-```
+# Start plnr in your project
+cd ~/my-project
+plnr
 
-2. **Navigate to any project**:
-```bash
-cd ~/my-express-api
-```
+# Ask questions about your code
+❯ how does authentication work?
 
-3. **Run ContextEngine**:
-```bash
-cengine plan "add rate limiting middleware"
-```
+# Generate a plan
+❯ /plan Add JWT authentication
 
-4. **View the generated plan** and optionally export it:
-```bash
-# Plans are saved to .cengine/plan-{timestamp}.md
+# Export the plan
+❯ /export
+
+# Hand off to Claude Code
+❯ /cc
 ```
 
 ## How It Works
@@ -145,16 +145,17 @@ cengine plan "add rate limiting middleware"
 ## Project Structure
 
 ```
-contextengine/
+plnr/
 ├── src/
-│   ├── cli/           # Terminal UI and output formatting
+│   ├── cli/           # Terminal UI and interactive input
 │   ├── context/       # Codebase analysis and file reading
-│   ├── planning/      # AI planning logic
+│   ├── planning/      # AI planning with tool calling
+│   ├── tools/         # Tool definitions and handlers
 │   ├── exporters/     # PRD generation
 │   ├── types/         # TypeScript definitions
 │   └── utils/         # Utilities
 ├── dist/              # Compiled output
-└── .cengine/          # Generated plans (gitignored)
+└── docs/              # Documentation
 ```
 
 ## Configuration
@@ -167,29 +168,9 @@ NODE_ENV=development
 DEBUG=true
 ```
 
-## Examples
-
-### Example 1: Add Authentication
-
-```bash
-cengine plan "add JWT authentication with refresh tokens"
-```
-
-### Example 2: API Endpoints
-
-```bash
-cengine plan "create REST API endpoints for user management"
-```
-
-### Example 3: Database Integration
-
-```bash
-cengine plan "integrate PostgreSQL with Prisma ORM"
-```
-
 ## Troubleshooting
 
-### Command not found: cengine
+### Command not found: plnr
 
 ```bash
 # Re-link the package
@@ -229,4 +210,6 @@ MIT
 
 ---
 
-Built with ❤️ using TypeScript, Ink, and OpenRouter
+**plnr** - Plan before implementation
+
+Built with TypeScript and OpenRouter

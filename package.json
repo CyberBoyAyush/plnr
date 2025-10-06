@@ -1,10 +1,10 @@
 {
-  "name": "contextengine",
+  "name": "plnr",
   "version": "1.0.0",
-  "description": "AI-powered planning layer for coding agents",
+  "description": "Plan before implementation - AI-powered planning for your codebase",
   "type": "module",
   "bin": {
-    "cengine": "./dist/index.js"
+    "plnr": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.tsx",
