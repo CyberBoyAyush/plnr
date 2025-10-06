@@ -9,8 +9,8 @@ const openai = new OpenAI({
   apiKey: config.openRouterApiKey,
   baseURL: 'https://openrouter.ai/api/v1',
   defaultHeaders: {
-    'HTTP-Referer': 'https://github.com/cyberboyayush/cengine',
-    'X-Title': 'ContextEngine CLI'
+    'HTTP-Referer': 'https://github.com/cyberboyayush/plnr',
+    'X-Title': 'Plnr (Planner)'
   }
 });
 
