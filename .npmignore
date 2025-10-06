@@ -1,0 +1,24 @@
+# Source files (ship only dist/)
+src/
+tsconfig.json
+
+# Environment files
+.env
+.env.example
+
+# Development files
+node_modules/
+.DS_Store
+*.log
+
+# Project-specific
+.cengine/
+docs/
+
+# Git files
+.git/
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
