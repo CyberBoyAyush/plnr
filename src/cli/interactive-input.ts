@@ -14,6 +14,12 @@ interface InteractiveInputOptions {
   filesFuse: Fuse<string> | null;
 }
 
+interface Suggestion {
+  value: string;
+  display?: string;
+  description?: string;
+}
+
 export async function getInteractiveInput(options: InteractiveInputOptions): Promise<string> {
   return new Promise((resolve) => {
     const { prompt: promptText, commands, files, filesFuse } = options;
@@ -23,7 +29,8 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     const visiblePromptLength = stripAnsi(promptText).length;
 
     let inputBuffer = '';
-    let suggestions: Array<{ value: string; description?: string }> = [];
+    let cursorPosition = 0;
+    let suggestions: Suggestion[] = [];
     let selectedIndex = 0;
     let showMenu = false;
 
@@ -42,35 +49,49 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
       // Don't pause stdin - we need it for the next iteration
     };
 
-    const getSuggestions = (input: string): Array<{ value: string; description?: string }> => {
-      // For / commands
-      if (input.startsWith('/')) {
+    const getSuggestions = (input: string): Suggestion[] => {
+      // For / commands - only at the start and no space yet
+      if (input.startsWith('/') && !input.includes(' ')) {
         const query = input.substring(1);
         const matches = commands.filter(c => c.name.substring(1).startsWith(query));
-        return matches.map(c => ({ value: c.name, description: c.description }));
+        return matches.map(c => ({ value: c.name, display: c.name, description: c.description }));
       }
 
-      // For @ file mentions
+      // For @ file mentions - check the text after last @
       const lastAtIndex = input.lastIndexOf('@');
       if (lastAtIndex !== -1) {
         const afterAt = input.substring(lastAtIndex + 1);
         const beforeAt = input.substring(0, lastAtIndex);
 
-        if (!afterAt) {
-          return files.slice(0, 10).map(f => ({ value: beforeAt + '@' + f }));
-        }
+        // Check if we're still typing after @ (no space after @)
+        const afterAtParts = afterAt.split(' ');
+        if (afterAtParts.length === 1) {
+          const searchTerm = afterAtParts[0];
 
-        let matchingFiles: string[] = [];
-        if (filesFuse) {
-          const results = filesFuse.search(afterAt, { limit: 10 });
-          matchingFiles = results.map(r => r.item);
-        } else {
-          matchingFiles = files
-            .filter(f => f.toLowerCase().includes(afterAt.toLowerCase()))
-            .slice(0, 10);
-        }
+          if (!searchTerm) {
+            return files.slice(0, 10).map(f => ({
+              value: beforeAt + '@' + f,
+              display: f,
+              description: ''
+            }));
+          }
 
-        return matchingFiles.map(f => ({ value: beforeAt + '@' + f }));
+          let matchingFiles: string[] = [];
+          if (filesFuse) {
+            const results = filesFuse.search(searchTerm, { limit: 10 });
+            matchingFiles = results.map(r => r.item);
+          } else {
+            matchingFiles = files
+              .filter(f => f.toLowerCase().includes(searchTerm.toLowerCase()))
+              .slice(0, 10);
+          }
+
+          return matchingFiles.map(f => ({
+            value: beforeAt + '@' + f,
+            display: f,
+            description: ''
+          }));
+        }
       }
 
       return [];
@@ -109,18 +130,19 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         for (let i = 0; i < displayCount; i++) {
           const suggestion = suggestions[i];
           const isSelected = i === selectedIndex;
+          const displayText = suggestion.display || suggestion.value;
 
           // Clear this line first
           readline.clearLine(process.stdout, 0);
 
           if (isSelected) {
             // Highlighted selection with cyan background
-            process.stdout.write(chalk.bgCyan.black('❯ ' + suggestion.value));
+            process.stdout.write(chalk.bgCyan.black('❯ ' + displayText));
             if (suggestion.description) {
               process.stdout.write(' ' + chalk.gray(suggestion.description));
             }
           } else {
-            process.stdout.write('  ' + chalk.gray(suggestion.value));
+            process.stdout.write('  ' + chalk.gray(displayText));
             if (suggestion.description) {
               process.stdout.write(' ' + chalk.gray(suggestion.description));
             }
@@ -133,9 +155,11 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
 
         // Move cursor back to input line
         readline.moveCursor(process.stdout, 0, -displayCount);
-        readline.cursorTo(process.stdout, visiblePromptLength + inputBuffer.length);
+        readline.cursorTo(process.stdout, visiblePromptLength + cursorPosition);
       } else {
         lastMenuLines = 0;
+        // Position cursor at current position
+        readline.cursorTo(process.stdout, visiblePromptLength + cursorPosition);
       }
     };
 
@@ -183,6 +207,7 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
           selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : suggestions.length - 1;
           // Update input buffer to show selected item
           inputBuffer = suggestions[selectedIndex].value;
+          cursorPosition = inputBuffer.length;
           render();
           return;
         }
@@ -191,15 +216,46 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
           selectedIndex = selectedIndex < suggestions.length - 1 ? selectedIndex + 1 : 0;
           // Update input buffer to show selected item
           inputBuffer = suggestions[selectedIndex].value;
+          cursorPosition = inputBuffer.length;
           render();
           return;
         }
       }
 
+      // Handle left/right arrow keys for cursor movement
+      if (key.name === 'left') {
+        if (cursorPosition > 0) {
+          cursorPosition--;
+          render();
+        }
+        return;
+      }
+
+      if (key.name === 'right') {
+        if (cursorPosition < inputBuffer.length) {
+          cursorPosition++;
+          render();
+        }
+        return;
+      }
+
       // Handle Backspace
       if (key.name === 'backspace') {
-        if (inputBuffer.length > 0) {
-          inputBuffer = inputBuffer.slice(0, -1);
+        if (cursorPosition > 0) {
+          inputBuffer = inputBuffer.slice(0, cursorPosition - 1) + inputBuffer.slice(cursorPosition);
+          cursorPosition--;
+          suggestions = getSuggestions(inputBuffer);
+          showMenu = suggestions.length > 0;
+          selectedIndex = 0;
+          render();
+        }
+        return;
+      }
+
+      // Handle Delete
+      if (key.name === 'delete') {
+        if (cursorPosition < inputBuffer.length) {
+          inputBuffer = inputBuffer.slice(0, cursorPosition) + inputBuffer.slice(cursorPosition + 1);
           suggestions = getSuggestions(inputBuffer);
           showMenu = suggestions.length > 0;
           selectedIndex = 0;
@@ -217,7 +273,8 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
 
       // Handle regular character input
       if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        inputBuffer += key.sequence;
+        inputBuffer = inputBuffer.slice(0, cursorPosition) + key.sequence + inputBuffer.slice(cursorPosition);
+        cursorPosition++;
 
         // Check if we should show menu
         const newSuggestions = getSuggestions(inputBuffer);
