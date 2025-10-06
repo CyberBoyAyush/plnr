@@ -21,6 +21,11 @@ import { getInteractiveInput } from './cli/interactive-input.js';
 import { logger } from './utils/logger.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const packageJson = require('../package.json');
+const VERSION = packageJson.version;
 
 const program = new Command();
 
@@ -87,7 +92,7 @@ async function loadProjectFiles(projectRoot: string): Promise<void> {
 program
   .name('plnr')
   .description('Plan before implementation - AI-powered planning for your codebase')
-  .version('1.0.0');
+  .version(VERSION);
 
 // Interactive mode (default)
 program
@@ -104,6 +109,7 @@ program
     console.log(chalk.bold.cyan('║           ') + chalk.bold.white('plnr') + chalk.bold.cyan(' - Plan First           ║'));
     console.log(chalk.bold.cyan('╚═══════════════════════════════════════════╝'));
     console.log(chalk.dim('\n  Plan before implementation\n'));
+    console.log(chalk.gray(`  Version: ${VERSION}`));
     console.log(chalk.gray(`  Model: ${config.model} (via OpenRouter)`));
     console.log(chalk.gray('  Commands: /plan | /export | /cc | /security-check | /exit'));
     console.log(chalk.gray('  Use @ to mention files (e.g., @src/index.ts)\n'));
