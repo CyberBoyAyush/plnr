@@ -5,6 +5,7 @@ import { callOpenRouterWithTools } from './openrouter.js';
 import { logger } from '../utils/logger.js';
 import { tools } from '../tools/definitions.js';
 import { executeToolCall } from '../tools/handlers.js';
+import { config } from '../config.js';
 import chalk from 'chalk';
 
 export async function generatePlan(
@@ -66,7 +67,7 @@ IMPORTANT:
 
       // Use more tokens for chat mode to allow detailed responses
       const maxTokens = isPlanning ? 4000 : 8000;
-      const completion = await callOpenRouterWithTools(messages, tools, 'x-ai/grok-code-fast-1', maxTokens);
+      const completion = await callOpenRouterWithTools(messages, tools, config.model, maxTokens);
       const message = completion.choices[0]?.message;
 
       // Track token usage
@@ -108,6 +109,50 @@ IMPORTANT:
           } else {
             console.log(chalk.red('✗'));
           }
+        }
+
+        // Smart pruning: Adjust based on model context window
+        // Calculate dynamic retention based on context window size
+        const contextWindow = config.modelContextWindow;
+        let recentToKeep = 10;
+        let pruneThreshold = 20;
+
+        if (contextWindow >= 2000000) {
+          // Large context (2M+): Keep more, prune later
+          recentToKeep = 15;
+          pruneThreshold = 30;
+        } else if (contextWindow >= 500000) {
+          // Medium context (500K-2M): Standard pruning
+          recentToKeep = 10;
+          pruneThreshold = 20;
+        } else {
+          // Small context (<500K): Aggressive pruning
+          recentToKeep = 8;
+          pruneThreshold = 15;
+        }
+
+        if (messages.length > pruneThreshold) {
+          const systemMsg = messages[0]; // Keep system prompt
+          const userMsg = messages[1];   // Keep user task
+
+          // Filter out failed tool calls from middle messages
+          const recentMessages = messages.slice(-recentToKeep);
+          const middleMessages = messages.slice(2, -recentToKeep);
+
+          // Keep only successful tool results from middle
+          const filteredMiddle = middleMessages.filter(msg => {
+            if (msg.role !== 'tool') return true; // Keep non-tool messages
+            const content = (msg as any).content || '';
+            // Remove failed tool results
+            return !content.includes('File not found') &&
+                   !content.includes('No matches') &&
+                   !content.includes('failed') &&
+                   !content.includes('not allowed');
+          });
+
+          messages.length = 0;
+          messages.push(systemMsg, userMsg, ...filteredMiddle, ...recentMessages);
+          logger.debug(`Pruned context (window: ${contextWindow}): ${middleMessages.length - filteredMiddle.length} failed tool results removed`);
         }
       } else {
         // No more tool calls, we have the final response

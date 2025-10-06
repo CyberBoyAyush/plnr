@@ -8,7 +8,7 @@ process.on('warning', (warning) => {
 });
 
 import { Command } from 'commander';
-import { validateConfig } from './config.js';
+import { validateConfig, config } from './config.js';
 import { gatherContext } from './context/gatherer.js';
 import { generatePlan } from './planning/planner.js';
 import { exportPRD } from './exporters/prd-writer.js';
@@ -29,6 +29,7 @@ const COMMANDS = [
   { name: '/plan', description: 'Generate an implementation plan (with or without task)' },
   { name: '/export', description: 'Export the current plan as markdown' },
   { name: '/cc', description: 'Start Claude Code with current context' },
+  { name: '/security-check', description: 'Run security scan on codebase' },
   { name: '/clear', description: 'Clear conversation and start fresh' },
   { name: '/help', description: 'Show available commands' },
   { name: '/exit', description: 'Exit plnr' },
@@ -103,8 +104,8 @@ program
     console.log(chalk.bold.cyan('║           ') + chalk.bold.white('plnr') + chalk.bold.cyan(' - Plan First           ║'));
     console.log(chalk.bold.cyan('╚═══════════════════════════════════════════╝'));
     console.log(chalk.dim('\n  Plan before implementation\n'));
-    console.log(chalk.gray('  Model: x-ai/grok-code-fast-1 (via OpenRouter)'));
-    console.log(chalk.gray('  Commands: /plan | /export | /cc | /help | /exit'));
+    console.log(chalk.gray(`  Model: ${config.model} (via OpenRouter)`));
+    console.log(chalk.gray('  Commands: /plan | /export | /cc | /security-check | /exit'));
     console.log(chalk.gray('  Use @ to mention files (e.g., @src/index.ts)\n'));
 
     const projectRoot = process.cwd();
@@ -201,7 +202,7 @@ program
               const planTokensDisplay = currentPlan.tokensUsed
                 ? ` • Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
                 : '';
-              console.log(chalk.dim(`Model: x-ai/grok-code-fast-1${planTokensDisplay}`));
+              console.log(chalk.dim(`Model: ${config.model}${planTokensDisplay}`));
               console.log(chalk.bold.white('━'.repeat(planTerminalWidth)) + '\n');
 
               displaySuccess('Plan generated!');
@@ -290,6 +291,93 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
           continue;
         }
 
+        // Handle security check
+        if (input === '/security-check') {
+          try {
+            console.log('');
+            displayInfo('Running security scan...');
+            console.log('');
+            console.log(chalk.dim('🔍 Scanning for critical vulnerabilities...\n'));
+
+            // Minimal context - just project structure, no file contents
+            const minimalContext: CodebaseContext = {
+              projectRoot,
+              language: context?.language || 'unknown',
+              framework: context?.framework || 'unknown',
+              dependencies: context?.dependencies || [],
+              relevantFiles: [],
+              fileTree: ''
+            };
+
+            // Ultra-short security prompt optimized for <250K tokens
+            const securityPrompt = `Security scan - CRITICAL issues only:
+
+1. Hardcoded secrets (search: API_KEY, SECRET, PASSWORD, TOKEN in source files)
+2. Auth issues
+3. SQL/XSS injection
+4. Insecure endpoints
+
+SKIP: .env files (already secure)
+Max 10-15 tool calls. Search first, read only suspicious files.
+Output: file:line, issue, risk, fix.`;
+
+            const securityReport = await generatePlan(minimalContext, securityPrompt, [], false);
+
+            // Display results with better formatting
+            const terminalWidth = process.stdout.columns || 80;
+            console.log('\n' + chalk.bold.red('━'.repeat(terminalWidth)));
+            console.log(chalk.bold.red('\n🛡️  SECURITY SCAN REPORT\n'));
+
+            // Parse and format the findings
+            const findings = securityReport.summary.split(/\n(?=\.\/)/); // Split by file paths
+
+            if (findings.length > 0 && findings[0].trim()) {
+              findings.forEach((finding, index) => {
+                const match = finding.match(/^(\.\/[^,]+):(\d+),\s*([^,]+),\s*([^,]+),\s*(.+)$/);
+
+                if (match) {
+                  const [, file, line, issue, risk, fix] = match;
+
+                  // Risk level coloring
+                  let riskColor = chalk.yellow;
+                  if (risk.toLowerCase().includes('critical')) riskColor = chalk.red.bold;
+                  else if (risk.toLowerCase().includes('high')) riskColor = chalk.red;
+                  else if (risk.toLowerCase().includes('medium')) riskColor = chalk.yellow;
+                  else if (risk.toLowerCase().includes('low')) riskColor = chalk.blue;
+
+                  console.log(chalk.cyan(`\n${index + 1}. ${file}:${line}`));
+                  console.log(chalk.white(`   Issue: ${issue.trim()}`));
+                  console.log(riskColor(`   Risk:  ${risk.trim()}`));
+                  console.log(chalk.gray(`   Fix:   ${fix.trim()}`));
+                } else {
+                  // Fallback for non-standard format
+                  if (finding.trim()) {
+                    console.log('\n' + chalk.white(finding.trim()));
+                  }
+                }
+              });
+            } else {
+              console.log(chalk.green('\n✓ No critical security issues found!'));
+              console.log(chalk.gray('\nThe codebase appears secure. Consider regular security audits.'));
+            }
+
+            console.log('\n' + chalk.dim('─'.repeat(terminalWidth)));
+            const tokensDisplay = securityReport.tokensUsed
+              ? ` • Tokens: ${(securityReport.tokensUsed / 1000).toFixed(1)}k`
+              : '';
+            console.log(chalk.dim(`Model: ${config.model}${tokensDisplay}`));
+            console.log(chalk.bold.red('━'.repeat(terminalWidth)) + '\n');
+
+            displaySuccess('Security scan complete!');
+            console.log('');
+          } catch (error: any) {
+            console.log('\n');
+            displayError(error.message || 'Security scan failed');
+            console.log('');
+          }
+          continue;
+        }
+
         // Handle clear
         if (input === '/clear') {
           console.clear();
@@ -297,8 +385,8 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
           console.log(chalk.bold.cyan('║           ') + chalk.bold.white('plnr') + chalk.bold.cyan(' - Plan First           ║'));
           console.log(chalk.bold.cyan('╚═══════════════════════════════════════════╝'));
           console.log(chalk.dim('\n  Plan before implementation\n'));
-          console.log(chalk.gray('  Model: x-ai/grok-code-fast-1 (via OpenRouter)'));
-          console.log(chalk.gray('  Commands: /plan | /export | /cc | /help | /exit'));
+          console.log(chalk.gray(`  Model: ${config.model} (via OpenRouter)`));
+          console.log(chalk.gray('  Commands: /plan | /export | /cc | /security-check | /exit'));
           console.log(chalk.gray('  Use @ to mention files (e.g., @src/index.ts)\n'));
 
           // Reset state
@@ -316,12 +404,13 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
         if (input === '/help' || input === '?') {
           console.log('');
           displayInfo('Available commands:');
-          console.log('  /plan [task]   - Generate an implementation plan (with or without task)');
-          console.log('  /export        - Export the current plan as markdown');
-          console.log('  /cc            - Launch Claude Code with gathered context');
-          console.log('  /clear         - Clear conversation and start fresh');
-          console.log('  /help          - Show this help message');
-          console.log('  /exit          - Exit plnr');
+          console.log('  /plan [task]      - Generate an implementation plan');
+          console.log('  /export           - Export the current plan as markdown');
+          console.log('  /cc               - Launch Claude Code with gathered context');
+          console.log('  /security-check   - Run security scan on codebase');
+          console.log('  /clear            - Clear conversation and start fresh');
+          console.log('  /help             - Show this help message');
+          console.log('  /exit             - Exit plnr');
           console.log('');
           displayInfo('File mentions:');
           console.log('  @file.ts       - Mention a file (use Tab for autocomplete)');
@@ -336,6 +425,7 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
           console.log('  Just chat:  "How do I add authentication?"');
           console.log('  Make plan:  "/plan Add JWT authentication"');
           console.log('  With files: "/plan @src/auth.ts Add JWT to this file"');
+          console.log('  Security:   "/security-check" (scan for vulnerabilities)');
           console.log('  To Claude:  "/cc" (after gathering context)');
           console.log('');
           continue;
@@ -437,7 +527,7 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
           const tokensDisplay = response.tokensUsed
             ? ` • Tokens: ${(response.tokensUsed / 1000).toFixed(1)}k`
             : '';
-          console.log(chalk.dim(`Model: x-ai/grok-code-fast-1 ${tokensDisplay}`));
+          console.log(chalk.dim(`Model: ${config.model} ${tokensDisplay}`));
           console.log(chalk.bold.white('━'.repeat(terminalWidth)) + '\n');
         } catch (error: any) {
           console.log('\n');

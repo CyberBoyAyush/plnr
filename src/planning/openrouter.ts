@@ -17,7 +17,7 @@ const openai = new OpenAI({
 export async function callOpenRouter(
   prompt: string,
   isPlanning: boolean = true,
-  model: string = 'x-ai/grok-code-fast-1'
+  model: string = config.model
 ): Promise<string> {
   const spinner = ora({
     text: isPlanning
@@ -99,7 +99,7 @@ export async function callOpenRouter(
 export async function callOpenRouterWithTools(
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
-  model: string = 'x-ai/grok-code-fast-1',
+  model: string = config.model,
   maxTokens: number = 4000
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   try {

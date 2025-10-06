@@ -14,6 +14,8 @@ dotenv.config({ path: join(toolRoot, '.env') });
 
 export const config: Config = {
   openRouterApiKey: process.env.OPENROUTER_API_KEY || '',
+  model: process.env.MODEL || 'x-ai/grok-code-fast-1',
+  modelContextWindow: parseInt(process.env.MODEL_CONTEXT_WINDOW || '256000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   debug: process.env.DEBUG === 'true'
 };

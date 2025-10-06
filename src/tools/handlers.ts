@@ -21,21 +21,21 @@ export async function handleReadFile(filePath: string, projectRoot: string): Pro
     const absolutePath = join(projectRoot, filePath);
     const content = await readFile(absolutePath, 'utf-8');
 
-    // Limit content size to avoid overwhelming context
-    const maxSize = 100000; // 100KB - increased from 50KB
+    // Limit content size to 20KB to stay under 250K token budget
+    const maxSize = 20000;
     const truncated = content.length > maxSize;
-    const result = truncated ? content.substring(0, maxSize) + '\n\n[Content truncated... file is too large]' : content;
+    const result = truncated ? content.substring(0, maxSize) + '\n\n[...truncated]' : content;
 
     logger.debug(`Read file: ${filePath} (${content.length} chars${truncated ? ', truncated' : ''})`);
     return {
       success: true,
-      result: `File: ${filePath}\n\n${result}`
+      result // No prefix to save tokens
     };
   } catch (error: any) {
-    logger.error(`Error reading file ${filePath}:`, error);
+    logger.debug(`Error reading file ${filePath}:`, error);
     return {
       success: false,
-      error: `Failed to read file: ${error.message}`
+      error: 'File not found' // Compressed error message
     };
   }
 }
@@ -65,26 +65,26 @@ export async function handleSearchFiles(
       '*.tsbuildinfo'
     ].map(dir => `--exclude-dir=${dir}`).join(' ');
 
-    // Use grep to search with exclusions, limit to 50 results
-    const command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n "${pattern}" . 2>/dev/null | head -n 50`;
+    // Use grep to search with exclusions, limit to 10 results for token efficiency
+    const command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n "${pattern}" . 2>/dev/null | head -n 10`;
 
     const { stdout, stderr } = await execAsync(command, {
       cwd: projectRoot,
-      maxBuffer: 1024 * 1024 * 20 // 20MB max buffer
+      maxBuffer: 1024 * 1024 * 5 // 5MB max buffer
     });
 
     if (stderr && !stdout) {
       return {
         success: false,
-        error: `Search failed: ${stderr}`
+        error: 'No matches' // Compressed error
       };
     }
 
     const result = stdout.trim() || 'No matches found';
     const lines = result.split('\n');
-    const limitedResult = lines.length > 50 ? lines.slice(0, 50).join('\n') + '\n\n[More results available...]' : result;
+    const limitedResult = lines.length > 10 ? lines.slice(0, 10).join('\n') + '\n[...more]' : result;
 
-    logger.debug(`Search for "${pattern}" found ${lines.length} results (showing up to 50)`);
+    logger.debug(`Search for "${pattern}" found ${lines.length} results (showing up to 10)`);
 
     return {
       success: true,
@@ -101,17 +101,17 @@ export async function handleSearchFiles(
 
     // Handle buffer overflow error gracefully
     if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-      logger.error(`Search output too large for pattern: ${pattern}`);
+      logger.debug(`Search output too large for pattern: ${pattern}`);
       return {
         success: false,
-        error: `Search returned too many results. Please use a more specific pattern or file_pattern filter.`
+        error: 'Too many results' // Compressed
       };
     }
 
-    logger.error(`Error searching files:`, error);
+    logger.debug(`Error searching files:`, error);
     return {
       success: false,
-      error: `Search failed: ${error.message}`
+      error: 'Search failed' // Compressed
     };
   }
 }
@@ -124,23 +124,23 @@ export async function handleListFiles(path: string, projectRoot: string): Promis
       absolute: false
     });
 
-    // Limit results
-    const limited = files.slice(0, 100);
-    const truncated = files.length > 100;
+    // Limit results to 50 for token efficiency
+    const limited = files.slice(0, 50);
+    const truncated = files.length > 50;
 
-    const result = limited.join('\n') + (truncated ? `\n\n[${files.length - 100} more files not shown]` : '');
+    const result = limited.join('\n') + (truncated ? `\n[...${files.length - 50} more]` : '');
 
     logger.debug(`Listed ${files.length} files matching "${path}"`);
 
     return {
       success: true,
-      result: `Files matching "${path}":\n\n${result || 'No files found'}`
+      result: result || 'No files found'
     };
   } catch (error: any) {
-    logger.error(`Error listing files:`, error);
+    logger.debug(`Error listing files:`, error);
     return {
       success: false,
-      error: `Failed to list files: ${error.message}`
+      error: 'List failed' // Compressed
     };
   }
 }
@@ -154,21 +154,21 @@ export async function handleExecuteCommand(command: string, projectRoot: string)
     if (!SAFE_COMMANDS.includes(baseCommand)) {
       return {
         success: false,
-        error: `Command "${baseCommand}" is not allowed. Only safe read-only commands are permitted: ${SAFE_COMMANDS.join(', ')}`
+        error: 'Command not allowed' // Compressed
       };
     }
 
     const { stdout, stderr } = await execAsync(command, {
       cwd: projectRoot,
-      maxBuffer: 1024 * 1024 * 20, // 20MB max buffer - increased from 5MB
+      maxBuffer: 1024 * 1024 * 5, // 5MB max buffer for token efficiency
       timeout: 30000 // 30s timeout
     });
 
-    // Limit output to prevent overwhelming context
-    const output = stdout.trim() || stderr.trim() || 'Command executed (no output)';
-    const maxOutputSize = 50000; // 50KB max
+    // Limit output to 20KB for token efficiency
+    const output = stdout.trim() || stderr.trim() || 'No output';
+    const maxOutputSize = 20000;
     const result = output.length > maxOutputSize
-      ? output.substring(0, maxOutputSize) + '\n\n[Output truncated... too large]'
+      ? output.substring(0, maxOutputSize) + '\n[...truncated]'
       : output;
 
     logger.debug(`Executed: ${command} (${output.length} chars output)`);
@@ -182,14 +182,14 @@ export async function handleExecuteCommand(command: string, projectRoot: string)
     if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
       return {
         success: false,
-        error: `Command output too large. Try using head/tail to limit output.`
+        error: 'Output too large' // Compressed
       };
     }
 
-    logger.error(`Error executing command:`, error);
+    logger.debug(`Error executing command:`, error);
     return {
       success: false,
-      error: `Command failed: ${error.message}`
+      error: 'Command failed' // Compressed
     };
   }
 }

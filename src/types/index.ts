@@ -31,6 +31,8 @@ export interface Step {
 
 export interface Config {
   openRouterApiKey: string;
+  model: string;
+  modelContextWindow: number;
   nodeEnv: string;
   debug: boolean;
 }

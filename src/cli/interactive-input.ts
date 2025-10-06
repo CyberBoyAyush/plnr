@@ -100,24 +100,28 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     let lastMenuLines = 0;
 
     const render = () => {
+      const termWidth = process.stdout.columns || 80;
+      const totalLength = visiblePromptLength + inputBuffer.length;
+      const inputLines = Math.ceil(totalLength / termWidth);
+
       // Clear previous menu if it exists
       if (lastMenuLines > 0) {
-        // Go to first menu line
-        readline.moveCursor(process.stdout, 0, 1);
-        // Clear all menu lines
         for (let i = 0; i < lastMenuLines; i++) {
+          readline.moveCursor(process.stdout, 0, 1);
           readline.clearLine(process.stdout, 0);
-          if (i < lastMenuLines - 1) {
-            readline.moveCursor(process.stdout, 0, 1);
-          }
         }
-        // Move back to input line
-        readline.moveCursor(process.stdout, 0, -(lastMenuLines));
+        readline.moveCursor(process.stdout, 0, -lastMenuLines);
       }
 
-      // Clear and redraw input line
+      // Clear input lines
       readline.cursorTo(process.stdout, 0);
-      readline.clearLine(process.stdout, 0);
+      for (let i = 0; i < inputLines; i++) {
+        readline.clearLine(process.stdout, 0);
+        if (i < inputLines - 1) readline.moveCursor(process.stdout, 0, 1);
+      }
+      if (inputLines > 1) readline.moveCursor(process.stdout, 0, -(inputLines - 1));
+
+      readline.cursorTo(process.stdout, 0);
       process.stdout.write(promptText + inputBuffer);
 
       // Show menu if needed
@@ -132,11 +136,9 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
           const isSelected = i === selectedIndex;
           const displayText = suggestion.display || suggestion.value;
 
-          // Clear this line first
           readline.clearLine(process.stdout, 0);
 
           if (isSelected) {
-            // Highlighted selection with cyan background
             process.stdout.write(chalk.bgCyan.black('❯ ' + displayText));
             if (suggestion.description) {
               process.stdout.write(' ' + chalk.gray(suggestion.description));
@@ -153,14 +155,17 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
           }
         }
 
-        // Move cursor back to input line
         readline.moveCursor(process.stdout, 0, -displayCount);
-        readline.cursorTo(process.stdout, visiblePromptLength + cursorPosition);
       } else {
         lastMenuLines = 0;
-        // Position cursor at current position
-        readline.cursorTo(process.stdout, visiblePromptLength + cursorPosition);
       }
+
+      // Position cursor accounting for wrapping
+      const cursorLine = Math.floor((visiblePromptLength + cursorPosition) / termWidth);
+      const cursorCol = (visiblePromptLength + cursorPosition) % termWidth;
+      readline.cursorTo(process.stdout, 0);
+      if (cursorLine > 0) readline.moveCursor(process.stdout, 0, cursorLine);
+      readline.moveCursor(process.stdout, cursorCol, 0);
     };
 
     const handleKeypress = (_str: string, key: readline.Key) => {
