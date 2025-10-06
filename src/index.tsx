@@ -482,7 +482,7 @@ Output: file:line, issue, risk, fix.`;
             const planTokensDisplay = currentPlan.tokensUsed
               ? ` • Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
               : '';
-            console.log(chalk.dim(`Model: x-ai/grok-code-fast-1${planTokensDisplay}`));
+            console.log(chalk.dim(`Model: ${config.model}${planTokensDisplay}`));
             console.log(chalk.bold.white('━'.repeat(planTerminalWidth)) + '\n');
             displaySuccess('Plan generated! Type /export to save, or continue chatting.');
             console.log('');

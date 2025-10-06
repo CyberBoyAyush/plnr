@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { config } from '../config.js';
 
 interface AppProps {
   onCommand: (command: string) => void;
@@ -38,7 +39,7 @@ export default function App({ onCommand, onExit }: AppProps) {
         <Box flexDirection="column" marginBottom={1}>
           <Text bold color="cyan">ContextEngine v1.0.0</Text>
           <Text color="gray">AI-powered planning for your codebase</Text>
-          <Text color="gray">Model: x-ai/grok-code-fast-1 (via OpenRouter)</Text>
+          <Text color="gray">Model: {config.model} (via OpenRouter)</Text>
           <Text> </Text>
           <Text color="gray">Commands: /export /help /exit</Text>
         </Box>
