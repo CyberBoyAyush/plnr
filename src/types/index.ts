@@ -18,6 +18,7 @@ export interface Plan {
   steps: Step[];
   dependencies_to_add: string[];
   risks: string[];
+  tokensUsed?: number;
 }
 
 export interface Step {

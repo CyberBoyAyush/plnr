@@ -81,7 +81,7 @@ program
       while (true) {
         try {
           const input = await getInteractiveInput({
-            prompt: chalk.cyan('> '),
+            prompt: chalk.bold.cyan('❯ '),
             commands: COMMANDS,
             files: cachedFiles,
             filesFuse,
@@ -207,16 +207,23 @@ program
             }
 
             // Step 2: Generate plan with conversation history
+            console.log(chalk.dim('⚡ Generating implementation plan...'));
             currentPlan = await generatePlan(context, task, conversationHistory, true);
 
             // Add to history
             conversationHistory.push({ task, plan: currentPlan });
 
             // Step 3: Display results
-            console.log('\n');
+            const planTerminalWidth = process.stdout.columns || 80;
+            console.log('\n' + chalk.bold.white('━'.repeat(planTerminalWidth)));
             displayPlan(currentPlan);
 
-            console.log('\n');
+            console.log('\n' + chalk.dim('─'.repeat(planTerminalWidth)));
+            const planTokensDisplay = currentPlan.tokensUsed
+              ? ` • Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
+              : '';
+            console.log(chalk.dim(`Model: x-ai/grok-code-fast-1${planTokensDisplay}`));
+            console.log(chalk.bold.white('━'.repeat(planTerminalWidth)) + '\n');
             displaySuccess('Plan generated! Type /export to save, or continue chatting.');
             console.log('');
           } catch (error: any) {
@@ -237,24 +244,31 @@ program
           }
 
           // Step 2: Generate conversational response
+          console.log(chalk.dim('⚡ Thinking...'));
           const response = await generatePlan(context, input, conversationHistory, false);
 
           // Add to history
           conversationHistory.push({ task: input, plan: response });
 
           // Step 3: Display results
-          console.log('\n');
-          console.log(chalk.bold('Response:'));
+          const terminalWidth = process.stdout.columns || 80;
+          console.log('\n' + chalk.bold.white('━'.repeat(terminalWidth)));
+          console.log(chalk.bold.green('\n✨ Response:\n'));
           console.log(response.summary);
 
           if (response.steps && response.steps.length > 0) {
-            console.log('\n' + chalk.bold('Suggestions:'));
+            console.log('\n' + chalk.bold.yellow('💡 Suggestions:'));
             response.steps.slice(0, 3).forEach((step, i) => {
-              console.log(`${i + 1}. ${step.title}`);
+              console.log(chalk.gray(`  ${i + 1}. ${step.title}`));
             });
           }
 
-          console.log('');
+          console.log('\n' + chalk.dim('─'.repeat(terminalWidth)));
+          const tokensDisplay = response.tokensUsed
+            ? ` • Tokens: ${(response.tokensUsed / 1000).toFixed(1)}k`
+            : '';
+          console.log(chalk.dim(`Model: x-ai/grok-code-fast-1 ${tokensDisplay}`));
+          console.log(chalk.bold.white('━'.repeat(terminalWidth)) + '\n');
         } catch (error: any) {
           console.log('\n');
           displayError(error.message || 'An error occurred');

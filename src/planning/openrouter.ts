@@ -99,7 +99,8 @@ export async function callOpenRouter(
 export async function callOpenRouterWithTools(
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
-  model: string = 'x-ai/grok-code-fast-1'
+  model: string = 'x-ai/grok-code-fast-1',
+  maxTokens: number = 4000
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   try {
     logger.debug(`Calling OpenRouter with tools. Model: ${model}`);
@@ -110,7 +111,7 @@ export async function callOpenRouterWithTools(
       tools,
       tool_choice: 'auto',
       temperature: 0.7,
-      max_tokens: 4000
+      max_tokens: maxTokens
     });
 
     logger.debug(`Tool call response received. Finish reason: ${completion.choices[0]?.finish_reason}`);
