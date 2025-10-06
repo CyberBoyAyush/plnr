@@ -1,6 +1,6 @@
 {
   "name": "plnr",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Plan before implementation - AI-powered planning for your codebase",
   "type": "module",
   "bin": {
