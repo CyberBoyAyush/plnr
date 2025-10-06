@@ -4,6 +4,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { glob } from 'glob';
 import { logger } from '../utils/logger.js';
+import { config } from '../config.js';
 
 const execAsync = promisify(exec);
 
@@ -194,6 +195,60 @@ export async function handleExecuteCommand(command: string, projectRoot: string)
   }
 }
 
+export async function handleWebSearch(query: string): Promise<ToolCallResult> {
+  try {
+    const response = await fetch('https://api.exa.ai/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.exaApiKey
+      },
+      body: JSON.stringify({
+        query,
+        numResults: 5,
+        contents: { text: { maxCharacters: 1000 } }
+      })
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `Search failed: ${response.status}` };
+    }
+
+    const data: any = await response.json();
+    const results = data.results?.slice(0, 5).map((r: any) =>
+      `${r.title}\n${r.url}\n${r.text || ''}`
+    ).join('\n\n') || 'No results';
+
+    return { success: true, result: results };
+  } catch (error: any) {
+    logger.debug(`Exa search error:`, error);
+    return { success: false, error: 'Search failed' };
+  }
+}
+
+export async function handleGetCodeContext(query: string): Promise<ToolCallResult> {
+  try {
+    const response = await fetch('https://api.exa.ai/context', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.exaApiKey
+      },
+      body: JSON.stringify({ query })
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `Code context failed: ${response.status}` };
+    }
+
+    const data: any = await response.json();
+    return { success: true, result: data.context || 'No context found' };
+  } catch (error: any) {
+    logger.debug(`Exa code context error:`, error);
+    return { success: false, error: 'Code context failed' };
+  }
+}
+
 export async function executeToolCall(
   toolName: string,
   args: any,
@@ -216,6 +271,12 @@ export async function executeToolCall(
 
     case 'execute_command':
       return handleExecuteCommand(args.command, projectRoot);
+
+    case 'web_search':
+      return handleWebSearch(args.query);
+
+    case 'get_code_context':
+      return handleGetCodeContext(args.query);
 
     default:
       return {

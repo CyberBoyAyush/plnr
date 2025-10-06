@@ -22,13 +22,15 @@ export async function generatePlan(
 
     // Build messages for tool calling
     const systemPrompt = isPlanning
-      ? 'You are an expert software architect. Use the provided tools to explore and analyze the codebase thoroughly. Search for relevant files, read code, and gather information before creating your implementation plan. Be specific, thorough, and practical. Always respond with valid JSON only when providing the final plan.'
+      ? 'You are an expert software architect. Use the provided tools to explore and analyze the codebase thoroughly. Search for relevant files, read code, and gather information before creating your implementation plan. Use web_search or get_code_context when you need current information, documentation, or examples not in the codebase. Be specific, thorough, and practical. Always respond with valid JSON only when providing the final plan.'
       : `You are an expert software architect and helpful coding assistant.
 
 INSTRUCTIONS:
 1. Use tools EFFICIENTLY to find information:
    - Start with search_files to locate relevant files
    - Use read_file only on the most relevant files
+   - Use web_search when user asks to search the web or you need current information
+   - Use get_code_context for API docs, library examples, or framework usage
    - Avoid redundant tool calls (ls, execute_command for basic listing)
    - Focus on files that directly answer the question
 
@@ -47,6 +49,7 @@ INSTRUCTIONS:
 IMPORTANT:
 - Do NOT waste tool calls on basic directory listing
 - Use search_files to find files, then read_file to get content
+- Use web_search or get_code_context when information is not in codebase
 - Respond in natural language (NOT JSON) after gathering info
 - Be thorough but efficient with tool usage`;
 

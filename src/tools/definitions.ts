@@ -76,5 +76,39 @@ export const tools: ChatCompletionTool[] = [
         required: ['command']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Search the web for current information, documentation, or answers. Use this when you need information not available in the codebase, or when user asks to search the web.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query'
+          }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_code_context',
+      description: 'Search for code examples, API documentation, and library usage from the web. Use this when you need examples for specific APIs, libraries, or frameworks.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The code or API you want to find examples for (e.g., "React useState", "Express middleware")'
+          }
+        },
+        required: ['query']
+      }
+    }
   }
 ];
