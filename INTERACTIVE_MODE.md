@@ -38,7 +38,7 @@ cengine                       # Interactive session!
 ### 3. Model Information
 Shows which AI model is being used:
 ```
-Model: x-ai/grok-2-1212 (via OpenRouter)
+Model: x-ai/grok-code-fast-1 (via OpenRouter)
 ```
 
 ### 4. Command System

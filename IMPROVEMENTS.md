@@ -39,7 +39,7 @@
 🤖 Generating Implementation Plan
 
 ⠋ AI is analyzing your codebase...
-✓ AI analysis complete (x-ai/grok-2-1212)
+✓ AI analysis complete (x-ai/grok-code-fast-1)
 
 📋 Implementation Plan
 ...

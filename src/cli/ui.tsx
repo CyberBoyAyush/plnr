@@ -38,7 +38,7 @@ export default function App({ onCommand, onExit }: AppProps) {
         <Box flexDirection="column" marginBottom={1}>
           <Text bold color="cyan">ContextEngine v1.0.0</Text>
           <Text color="gray">AI-powered planning for your codebase</Text>
-          <Text color="gray">Model: x-ai/grok-2-1212 (via OpenRouter)</Text>
+          <Text color="gray">Model: x-ai/grok-code-fast-1 (via OpenRouter)</Text>
           <Text> </Text>
           <Text color="gray">Commands: /export /help /exit</Text>
         </Box>

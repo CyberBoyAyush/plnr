@@ -25,7 +25,7 @@ You are standing in an open terminal. An AI awaits your commands.
 
 ENTER to send • \ + ENTER for a new line • @ to mention files
 
-Model: x-ai/grok-2-1212 (via OpenRouter)
+Model: x-ai/grok-code-fast-1 (via OpenRouter)
 
 > _
 ```

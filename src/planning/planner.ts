@@ -6,15 +6,16 @@ import { logger } from '../utils/logger.js';
 export async function generatePlan(
   context: CodebaseContext,
   task: string,
-  conversationHistory: Array<{task: string, plan: Plan}> = []
+  conversationHistory: Array<{task: string, plan: Plan}> = [],
+  isPlanning: boolean = true
 ): Promise<Plan> {
   try {
     logger.debug('Building prompt for AI...');
 
-    const prompt = buildPlanningPrompt(context, task, conversationHistory);
+    const prompt = buildPlanningPrompt(context, task, conversationHistory, isPlanning);
     logger.debug(`Prompt size: ${prompt.length} characters`);
 
-    const response = await callOpenRouter(prompt);
+    const response = await callOpenRouter(prompt, isPlanning);
 
     // Try to extract JSON from response
     let planData: any;
