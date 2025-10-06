@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 
+// Suppress deprecation warnings
+process.removeAllListeners('warning');
+process.on('warning', (warning) => {
+  if (warning.name === 'DeprecationWarning') return;
+  console.warn(warning);
+});
+
 import { Command } from 'commander';
 import { validateConfig } from './config.js';
 import { gatherContext } from './context/gatherer.js';
@@ -34,17 +41,44 @@ let filesFuse: Fuse<string> | null = null;
 // Load project files for @ mentions
 async function loadProjectFiles(projectRoot: string): Promise<void> {
   try {
-    const files = await glob('**/*', {
-      cwd: projectRoot,
-      ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**', '.next/**', 'coverage/**'],
-      nodir: true,
-    });
-    cachedFiles = files;
-    filesFuse = new Fuse(cachedFiles, {
-      threshold: 0.3,
-    });
+    // Start with fast patterns first for immediate autocomplete
+    const patterns = [
+      '*.{ts,js,tsx,jsx,json,md}',  // Root files first (fastest)
+      'src/**/*',
+      'lib/**/*',
+      'app/**/*',
+      'pages/**/*',
+      'components/**/*',
+      'utils/**/*',
+      'api/**/*'
+    ];
+
+    const allFiles = new Set<string>();
+    for (const pattern of patterns) {
+      try {
+        const matches = await glob(pattern, {
+          cwd: projectRoot,
+          ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**', '.next/**', 'coverage/**'],
+          nodir: true,
+        });
+
+        // Add to set for deduplication
+        matches.forEach(f => allFiles.add(f));
+
+        // Update cache progressively by modifying array in place
+        cachedFiles.length = 0;
+        cachedFiles.push(...Array.from(allFiles));
+
+        // Update Fuse instance
+        filesFuse = new Fuse(cachedFiles, {
+          threshold: 0.3,
+        });
+      } catch {
+        // Skip pattern if it fails
+      }
+    }
   } catch (error) {
-    cachedFiles = [];
+    cachedFiles.length = 0;
   }
 }
 
@@ -79,8 +113,10 @@ program
     let context: CodebaseContext | null = null;
     let conversationHistory: Array<{task: string, plan: Plan}> = [];
 
-    // Load project files for autocomplete
-    await loadProjectFiles(projectRoot);
+    // Start loading project files in background AFTER prompt renders
+    setImmediate(() => {
+      loadProjectFiles(projectRoot).catch(() => {});
+    });
 
     // Main loop
     const mainLoop = async () => {
