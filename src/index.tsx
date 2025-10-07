@@ -113,6 +113,7 @@ program
     let currentTask: string | null = null;
     let context: CodebaseContext | null = null;
     let conversationHistory: Array<{task: string, plan: Plan}> = [];
+    let currentMode: 'plan' | 'chat' = 'chat'; // Start in chat mode by default
 
     // Start loading project files in background AFTER prompt renders
     setImmediate(() => {
@@ -128,10 +129,14 @@ program
             commands: COMMANDS,
             files: cachedFiles,
             filesFuse,
+            currentMode, // Pass the current mode to persist it
           });
 
           const input = result.input;
           const mode = result.mode;
+          
+          // Update current mode for next iteration
+          currentMode = mode;
 
           if (!input.trim()) {
             continue;
@@ -616,14 +621,23 @@ Output: file:line, issue, risk, fix.`;
         try {
           console.log('');
 
-          // Step 1: Gather context (only first time)
-          if (!context) {
+          // Step 1: Smart context gathering - only when needed
+          // Chat mode: Only gather if query mentions code/files or @ mentions
+          // Plan mode: Always gather context
+          const needsCodebaseContext = mode === 'plan' || 
+            mentionedFiles.length > 0 ||
+            /\b(file|code|implement|refactor|fix|bug|error|function|class|component|add|create|update|change)\b/i.test(input);
+          
+          if (!context && needsCodebaseContext) {
             context = await gatherContext(projectRoot, input, mentionedFiles);
           }
 
           // Step 2: Generate response based on mode
           if (mode === 'plan') {
-            // Plan mode: Generate structured implementation plan
+            // Plan mode: Always needs context
+            if (!context) {
+              context = await gatherContext(projectRoot, input, mentionedFiles);
+            }
             console.log(chalk.dim('⚡ Generating implementation plan...'));
             currentTask = input;
             currentPlan = await generatePlan(context, input, conversationHistory, true);
@@ -643,9 +657,20 @@ Output: file:line, issue, risk, fix.`;
             displaySuccess('Plan generated! Type /export to save, or continue chatting.');
             console.log('');
           } else {
-            // Chat mode: Conversational response
+            // Chat mode: Conversational (context optional for general questions)
             console.log(chalk.dim('⚡ Thinking...'));
-            const response = await generatePlan(context, input, conversationHistory, false);
+            
+            // Use minimal context if not analyzing codebase
+            const chatContext = context || {
+              projectRoot,
+              language: 'unknown',
+              framework: 'unknown',
+              dependencies: [],
+              relevantFiles: [],
+              fileTree: ''
+            };
+            
+            const response = await generatePlan(chatContext, input, conversationHistory, false);
 
             // Add to history
             conversationHistory.push({ task: input, plan: response });

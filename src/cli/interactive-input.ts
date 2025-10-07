@@ -12,6 +12,7 @@ interface InteractiveInputOptions {
   commands: Command[];
   files: string[];
   filesFuse: Fuse<string> | null;
+  currentMode?: InputMode; // Pass in the current mode to persist it
 }
 
 interface Suggestion {
@@ -29,7 +30,7 @@ export interface InteractiveInputResult {
 
 export async function getInteractiveInput(options: InteractiveInputOptions): Promise<InteractiveInputResult> {
   return new Promise((resolve) => {
-    const { prompt: promptText, commands, files, filesFuse } = options;
+    const { prompt: promptText, commands, files, filesFuse, currentMode: initialMode } = options;
 
     // Calculate visible prompt length (without ANSI codes)
     const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, '');
@@ -40,7 +41,7 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     let suggestions: Suggestion[] = [];
     let selectedIndex = 0;
     let showMenu = false;
-    let currentMode: InputMode = 'plan'; // Default to plan mode
+    let currentMode: InputMode = initialMode || 'chat'; // Default to chat mode, or use passed mode
 
     // Border box configuration
     const PADDING_LEFT = 1;
@@ -57,15 +58,20 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true);
     }
-    process.stdin.resume();
 
     const cleanup = () => {
-      // Clear the current display before exiting
+      // Don't clear the display - keep it visible for scrollback
+      // Just show cursor and move to end
+      process.stdout.write('\x1b[?25h'); // Show cursor
+      
+      // Move cursor to the end (after mode line) for clean output
       if (lastTotalLines > 0 && lastCursorPosition > 0) {
         try {
           readline.cursorTo(process.stdout, 0);
-          readline.moveCursor(process.stdout, 0, -lastCursorPosition);
-          readline.clearScreenDown(process.stdout);
+          const linesToMoveDown = (lastTotalLines - 1) - lastCursorPosition;
+          if (linesToMoveDown > 0) {
+            readline.moveCursor(process.stdout, 0, linesToMoveDown);
+          }
         } catch {}
       }
       
@@ -498,9 +504,17 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
 
     process.stdin.on('keypress', handleKeypress);
 
-    // Initial render - ensure we're on a clean slate
-    process.stdout.write('\n'); // Ensure we're on a new line after any previous output
-    readline.cursorTo(process.stdout, 0); // Move to start of line
-    render();
+    // Resume stdin and render on next tick to ensure everything is ready
+    process.stdin.resume();
+    process.nextTick(() => {
+      // Start fresh
+      process.stdout.write('\n');
+      readline.cursorTo(process.stdout, 0);
+      
+      // Reset state and render
+      lastTotalLines = 0;
+      lastCursorPosition = 0;
+      render();
+    });
   });
 }
