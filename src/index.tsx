@@ -123,12 +123,15 @@ program
     const mainLoop = async () => {
       while (true) {
         try {
-          const input = await getInteractiveInput({
+          const result = await getInteractiveInput({
             prompt: chalk.bold.cyan('❯ '),
             commands: COMMANDS,
             files: cachedFiles,
             filesFuse,
           });
+
+          const input = result.input;
+          const mode = result.mode;
 
           if (!input.trim()) {
             continue;
@@ -609,7 +612,7 @@ Output: file:line, issue, risk, fix.`;
           continue;
         }
 
-        // Default: Chat mode (conversational)
+        // Default: Use current mode (Plan or Chat)
         try {
           console.log('');
 
@@ -618,32 +621,55 @@ Output: file:line, issue, risk, fix.`;
             context = await gatherContext(projectRoot, input, mentionedFiles);
           }
 
-          // Step 2: Generate conversational response
-          console.log(chalk.dim('⚡ Thinking...'));
-          const response = await generatePlan(context, input, conversationHistory, false);
+          // Step 2: Generate response based on mode
+          if (mode === 'plan') {
+            // Plan mode: Generate structured implementation plan
+            console.log(chalk.dim('⚡ Generating implementation plan...'));
+            currentTask = input;
+            currentPlan = await generatePlan(context, input, conversationHistory, true);
 
-          // Add to history
-          conversationHistory.push({ task: input, plan: response });
+            // Add to history
+            conversationHistory.push({ task: input, plan: currentPlan });
 
-          // Step 3: Display results with markdown formatting
-          const terminalWidth = process.stdout.columns || 80;
-          console.log('\n' + chalk.bold.white('━'.repeat(terminalWidth)));
-          console.log(chalk.bold.green('\n✨ Response:\n'));
-          console.log(renderMarkdown(response.summary));
+            // Display plan
+            displayPlan(currentPlan);
 
-          if (response.steps && response.steps.length > 0) {
-            console.log('\n' + chalk.bold.yellow('💡 Suggestions:'));
-            response.steps.slice(0, 3).forEach((step, i) => {
-              console.log(chalk.gray(`  ${i + 1}. ${step.title}`));
-            });
+            console.log(divider(chalk.dim));
+            const planTokensDisplay = currentPlan.tokensUsed
+              ? `Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
+              : '';
+            console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(planTokensDisplay)));
+            console.log(divider(chalk.dim) + '\n');
+            displaySuccess('Plan generated! Type /export to save, or continue chatting.');
+            console.log('');
+          } else {
+            // Chat mode: Conversational response
+            console.log(chalk.dim('⚡ Thinking...'));
+            const response = await generatePlan(context, input, conversationHistory, false);
+
+            // Add to history
+            conversationHistory.push({ task: input, plan: response });
+
+            // Display chat response with markdown formatting
+            const terminalWidth = process.stdout.columns || 80;
+            console.log('\n' + chalk.bold.white('━'.repeat(terminalWidth)));
+            console.log(chalk.bold.green('\n✨ Response:\n'));
+            console.log(renderMarkdown(response.summary));
+
+            if (response.steps && response.steps.length > 0) {
+              console.log('\n' + chalk.bold.yellow('💡 Suggestions:'));
+              response.steps.slice(0, 3).forEach((step, i) => {
+                console.log(chalk.gray(`  ${i + 1}. ${step.title}`));
+              });
+            }
+
+            console.log('\n' + divider(chalk.dim));
+            const tokensDisplay = response.tokensUsed
+              ? `Tokens: ${(response.tokensUsed / 1000).toFixed(1)}k`
+              : '';
+            console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(tokensDisplay)));
+            console.log(divider(chalk.dim) + '\n');
           }
-
-          console.log('\n' + divider(chalk.dim));
-          const tokensDisplay = response.tokensUsed
-            ? `Tokens: ${(response.tokensUsed / 1000).toFixed(1)}k`
-            : '';
-          console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(tokensDisplay)));
-          console.log(divider(chalk.dim) + '\n');
         } catch (error: any) {
           console.log('\n');
           displayError(error.message || 'An error occurred');

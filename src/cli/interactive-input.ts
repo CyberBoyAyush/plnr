@@ -20,7 +20,14 @@ interface Suggestion {
   description?: string;
 }
 
-export async function getInteractiveInput(options: InteractiveInputOptions): Promise<string> {
+export type InputMode = 'plan' | 'chat';
+
+export interface InteractiveInputResult {
+  input: string;
+  mode: InputMode;
+}
+
+export async function getInteractiveInput(options: InteractiveInputOptions): Promise<InteractiveInputResult> {
   return new Promise((resolve) => {
     const { prompt: promptText, commands, files, filesFuse } = options;
 
@@ -33,6 +40,7 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     let suggestions: Suggestion[] = [];
     let selectedIndex = 0;
     let showMenu = false;
+    let currentMode: InputMode = 'plan'; // Default to plan mode
 
     // Border box configuration
     const PADDING_LEFT = 1;
@@ -52,6 +60,15 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     process.stdin.resume();
 
     const cleanup = () => {
+      // Clear the current display before exiting
+      if (lastTotalLines > 0 && lastCursorPosition > 0) {
+        try {
+          readline.cursorTo(process.stdout, 0);
+          readline.moveCursor(process.stdout, 0, -lastCursorPosition);
+          readline.clearScreenDown(process.stdout);
+        } catch {}
+      }
+      
       if (process.stdin.isTTY) {
         process.stdin.setRawMode(false);
       }
@@ -108,10 +125,13 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     };
 
     let lastMenuLines = 0;
-    let lastBoxLines = 0;
-    let lastCursorLine = 0; // Track which line the cursor is on
+    let lastTotalLines = 0; // Total lines rendered (box + mode indicator)
+    let lastCursorPosition = 0; // Where cursor was actually left (0-indexed line from top)
 
     const render = () => {
+      // Hide cursor during rendering to avoid visual glitches
+      process.stdout.write('\x1b[?25l');
+      
       const termWidth = process.stdout.columns || 80;
       const contentWidth = termWidth - 2 - PADDING_LEFT - PADDING_RIGHT; // 2 for left/right borders
       const fullText = promptText + inputBuffer;
@@ -120,6 +140,7 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
       // Calculate how many lines we need for wrapped text
       const contentLines = Math.max(1, Math.ceil(visibleFullLength / contentWidth));
       const totalBoxLines = contentLines + 2; // +2 for top and bottom borders
+      const totalLinesWithMode = totalBoxLines + 1; // +1 for mode line
 
       // Clear previous menu if it exists
       if (lastMenuLines > 0) {
@@ -130,24 +151,18 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         readline.moveCursor(process.stdout, 0, -lastMenuLines);
       }
 
-      // Clear previous box by moving cursor back and clearing lines
-      if (lastBoxLines > 0) {
-        // Cursor is currently at lastCursorLine within the box
-        // Move to the top of the box
+      // Clear previous render by moving back to start
+      if (lastTotalLines > 0) {
+        // Move cursor to column 0
         readline.cursorTo(process.stdout, 0);
-        readline.moveCursor(process.stdout, 0, -lastCursorLine);
         
-        // Clear all lines of the box
-        for (let i = 0; i < lastBoxLines; i++) {
-          readline.clearLine(process.stdout, 0);
-          if (i < lastBoxLines - 1) {
-            readline.moveCursor(process.stdout, 0, 1);
-          }
+        // Move up to the start - cursor is at lastCursorPosition
+        if (lastCursorPosition > 0) {
+          readline.moveCursor(process.stdout, 0, -lastCursorPosition);
         }
         
-        // Move cursor back to top
-        readline.moveCursor(process.stdout, 0, -(lastBoxLines - 1));
-        readline.cursorTo(process.stdout, 0);
+        // Clear everything from here down
+        readline.clearScreenDown(process.stdout);
       }
 
       // Draw top border
@@ -203,7 +218,15 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
       const bottomBorder = BORDER_CHAR_BOTTOM_LEFT + BORDER_CHAR_HORIZONTAL.repeat(termWidth - 2) + BORDER_CHAR_BOTTOM_RIGHT;
       process.stdout.write(chalk.gray(bottomBorder));
 
-      lastBoxLines = totalBoxLines;
+      // Display mode indicator below the box
+      readline.moveCursor(process.stdout, 0, 1);
+      readline.cursorTo(process.stdout, 0);
+      const modeText = currentMode === 'plan' 
+        ? chalk.cyan('  Mode: ') + chalk.bold.cyan('Plan') + chalk.gray(' (Shift+Tab to switch)')
+        : chalk.magenta('  Mode: ') + chalk.bold.magenta('Chat') + chalk.gray(' (Shift+Tab to switch)');
+      process.stdout.write(modeText);
+      
+      // Now cursor is at the END of mode line (last line rendered)
 
       // Show menu if needed
       if (showMenu && suggestions.length > 0) {
@@ -241,22 +264,31 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         lastMenuLines = 0;
       }
 
-      // Position cursor within the bordered box
+      // Position cursor within the bordered box for user input
       const cursorOffset = visiblePromptLength + cursorPosition;
       const cursorLine = Math.floor(cursorOffset / contentWidth);
       const cursorCol = cursorOffset % contentWidth;
       
-      // The cursor line we want to be on (1 for top border, then cursorLine content lines)
-      const targetLineInBox = 1 + cursorLine;
+      // Calculate target position: top border (0) + 1 + content lines = where cursor should be
+      const targetLine = 1 + cursorLine; // 0-indexed: 0=top border, 1=first content line
       
-      // Move cursor from bottom border to the correct content line
-      // Bottom border is at line (totalBoxLines - 1), we want line targetLineInBox
+      // We're currently at end of mode line, which is line (totalLinesWithMode - 1) in 0-indexed
+      // Move up to target line
+      const currentLine = totalLinesWithMode - 1;
+      const linesToMoveUp = currentLine - targetLine;
+      
       readline.cursorTo(process.stdout, 0);
-      readline.moveCursor(process.stdout, 0, -(totalBoxLines - 1 - targetLineInBox));
+      if (linesToMoveUp > 0) {
+        readline.moveCursor(process.stdout, 0, -linesToMoveUp);
+      }
       readline.moveCursor(process.stdout, 1 + PADDING_LEFT + cursorCol, 0);
       
-      // Remember where the cursor is for next render
-      lastCursorLine = targetLineInBox;
+      // Remember state for next render
+      lastTotalLines = totalLinesWithMode;
+      lastCursorPosition = targetLine; // Cursor is now at this line (0-indexed)
+      
+      // Show cursor again
+      process.stdout.write('\x1b[?25h');
     };
 
     const handleKeypress = (str: string, key: readline.Key) => {
@@ -285,12 +317,19 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         // If menu is closed or no suggestions, submit
         cleanup();
         process.stdout.write('\n');
-        resolve(inputBuffer);
+        resolve({ input: inputBuffer, mode: currentMode });
         return;
       }
 
-      // Handle Tab - cycle through suggestions
+      // Handle Tab - cycle through suggestions or toggle mode with Shift
       if (key.name === 'tab') {
+        if (key.shift) {
+          // Shift+Tab: Toggle mode
+          currentMode = currentMode === 'plan' ? 'chat' : 'plan';
+          render();
+          return;
+        }
+        
         if (showMenu && suggestions.length > 0) {
           selectedIndex = selectedIndex < suggestions.length - 1 ? selectedIndex + 1 : 0;
           // Update input buffer to show selected item
@@ -459,7 +498,9 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
 
     process.stdin.on('keypress', handleKeypress);
 
-    // Initial render - show bordered box
+    // Initial render - ensure we're on a clean slate
+    process.stdout.write('\n'); // Ensure we're on a new line after any previous output
+    readline.cursorTo(process.stdout, 0); // Move to start of line
     render();
   });
 }
