@@ -100,21 +100,112 @@ export async function callOpenRouterWithTools(
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
   model: string = config.model,
-  maxTokens: number = 4000
+  maxTokens: number = 4000,
+  streaming: boolean = false
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   try {
-    logger.debug(`Calling OpenRouter with tools. Model: ${model}`);
+    logger.debug(`Calling OpenRouter with tools. Model: ${model}, Streaming: ${streaming}`);
 
-    const completion = await openai.chat.completions.create({
+    // Non-streaming mode (for tool calls)
+    if (!streaming) {
+      const completion = await openai.chat.completions.create({
+        model,
+        messages,
+        tools,
+        tool_choice: 'auto',
+        temperature: 0.7,
+        max_tokens: maxTokens
+      });
+
+      logger.debug(`Tool call response received. Finish reason: ${completion.choices[0]?.finish_reason}`);
+      return completion;
+    }
+
+    // Streaming mode (for final text response) - show spinner with token count
+    const spinner = ora({
+      text: chalk.white('Generating response...'),
+      color: 'white'
+    }).start();
+
+    const stream = await openai.chat.completions.create({
       model,
       messages,
       tools,
       tool_choice: 'auto',
       temperature: 0.7,
-      max_tokens: maxTokens
+      max_tokens: maxTokens,
+      stream: true
     });
 
-    logger.debug(`Tool call response received. Finish reason: ${completion.choices[0]?.finish_reason}`);
+    let fullContent = '';
+    let fullToolCalls: any[] = [];
+    let finishReason = '';
+    let tokenCount = 0;
+
+    // Process stream chunks silently (no output)
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+
+      // Accumulate content and count tokens (rough estimate: ~4 chars per token)
+      if (delta?.content) {
+        fullContent += delta.content;
+        tokenCount = Math.floor(fullContent.length / 4);
+        spinner.text = chalk.white(`Generating response... `) + chalk.dim(`(~${tokenCount} tokens)`);
+      }
+
+      // Accumulate tool calls
+      if (delta?.tool_calls) {
+        for (const toolCall of delta.tool_calls) {
+          const index = toolCall.index;
+          if (!fullToolCalls[index]) {
+            fullToolCalls[index] = {
+              id: toolCall.id || '',
+              type: 'function',
+              function: { name: '', arguments: '' }
+            };
+          }
+          if (toolCall.function?.name) {
+            fullToolCalls[index].function.name = toolCall.function.name;
+          }
+          if (toolCall.function?.arguments) {
+            fullToolCalls[index].function.arguments += toolCall.function.arguments;
+          }
+          if (toolCall.id) {
+            fullToolCalls[index].id = toolCall.id;
+          }
+        }
+      }
+
+      // Capture finish reason
+      if (chunk.choices[0]?.finish_reason) {
+        finishReason = chunk.choices[0].finish_reason;
+      }
+    }
+
+    // Stop spinner
+    spinner.stop();
+
+    // Construct a ChatCompletion-like response
+    const completion: OpenAI.Chat.Completions.ChatCompletion = {
+      id: 'streamed-' + Date.now(),
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: fullContent || null,
+          tool_calls: fullToolCalls.length > 0 ? fullToolCalls : undefined,
+          refusal: null
+        },
+        logprobs: null,
+        finish_reason: finishReason as any
+      }],
+      usage: undefined
+    };
+
+    logger.debug(`Streaming complete. Finish reason: ${finishReason}`);
     return completion;
   } catch (error: any) {
     logger.error('OpenRouter tool call error:', error.message || error);

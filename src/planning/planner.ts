@@ -45,13 +45,15 @@ INSTRUCTIONS:
    - Use bullet points for lists
    - Use code blocks for code examples
    - Use headers for sections
+   - NEVER use tables (they don't render properly in terminal)
 
 IMPORTANT:
 - Do NOT waste tool calls on basic directory listing
 - Use search_files to find files, then read_file to get content
 - Use web_search or get_code_context when information is not in codebase
 - Respond in natural language (NOT JSON) after gathering info
-- Be thorough but efficient with tool usage`;
+- Be thorough but efficient with tool usage
+- NO TABLES in responses - use lists instead`;
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
@@ -70,7 +72,9 @@ IMPORTANT:
 
       // Use more tokens for chat mode to allow detailed responses
       const maxTokens = isPlanning ? 4000 : 8000;
-      const completion = await callOpenRouterWithTools(messages, tools, config.model, maxTokens);
+      // Enable streaming for chat mode (non-planning) on final response
+      const enableStreaming = !isPlanning && iteration > 1;
+      const completion = await callOpenRouterWithTools(messages, tools, config.model, maxTokens, enableStreaming);
       const message = completion.choices[0]?.message;
 
       // Track token usage

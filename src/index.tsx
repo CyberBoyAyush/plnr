@@ -12,7 +12,7 @@ import { validateConfig, config } from './config.js';
 import { gatherContext } from './context/gatherer.js';
 import { generatePlan } from './planning/planner.js';
 import { exportPRD } from './exporters/prd-writer.js';
-import { displayPlan, displaySuccess, displayError, displayInfo } from './cli/output.js';
+import { displayPlan, displaySuccess, displayError, displayInfo, renderMarkdown, displayWelcome, justifyText, divider } from './cli/output.js';
 import { Plan, CodebaseContext } from './types/index.js';
 import chalk from 'chalk';
 import { glob } from 'glob';
@@ -106,14 +106,7 @@ program
     }
 
     // Show welcome banner
-    console.log(chalk.bold.cyan('\n╔═══════════════════════════════════════════╗'));
-    console.log(chalk.bold.cyan('║           ') + chalk.bold.white('plnr') + chalk.bold.cyan(' - Plan First           ║'));
-    console.log(chalk.bold.cyan('╚═══════════════════════════════════════════╝'));
-    console.log(chalk.dim('\n  Plan before implementation\n'));
-    console.log(chalk.gray(`  Version: ${VERSION}`));
-    console.log(chalk.gray(`  Model: ${config.model} (via OpenRouter)`));
-    console.log(chalk.gray('  Commands: /plan | /export | /cc | /codex | /security-check | /exit'));
-    console.log(chalk.gray('  Use @ to mention files (e.g., @src/index.ts)\n'));
+    displayWelcome(VERSION, config.model);
 
     const projectRoot = process.cwd();
     let currentPlan: Plan | null = null;
@@ -202,15 +195,14 @@ program
               conversationHistory.push({ task: taskForPlan, plan: currentPlan });
 
               // Display the plan
-              const planTerminalWidth = process.stdout.columns || 80;
-              console.log('\n' + chalk.bold.white('━'.repeat(planTerminalWidth)));
               displayPlan(currentPlan);
-              console.log('\n' + chalk.dim('─'.repeat(planTerminalWidth)));
+
+              console.log(divider(chalk.dim));
               const planTokensDisplay = currentPlan.tokensUsed
-                ? ` • Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
+                ? `Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
                 : '';
-              console.log(chalk.dim(`Model: ${config.model}${planTokensDisplay}`));
-              console.log(chalk.bold.white('━'.repeat(planTerminalWidth)) + '\n');
+              console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(planTokensDisplay)));
+              console.log(divider(chalk.dim) + '\n');
 
               displaySuccess('Plan generated!');
               console.log('');
@@ -325,15 +317,14 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
               conversationHistory.push({ task: taskForPlan, plan: currentPlan });
 
               // Display the plan
-              const planTerminalWidth = process.stdout.columns || 80;
-              console.log('\n' + chalk.bold.white('━'.repeat(planTerminalWidth)));
               displayPlan(currentPlan);
-              console.log('\n' + chalk.dim('─'.repeat(planTerminalWidth)));
+
+              console.log(divider(chalk.dim));
               const planTokensDisplay = currentPlan.tokensUsed
-                ? ` • Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
+                ? `Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
                 : '';
-              console.log(chalk.dim(`Model: ${config.model}${planTokensDisplay}`));
-              console.log(chalk.bold.white('━'.repeat(planTerminalWidth)) + '\n');
+              console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(planTokensDisplay)));
+              console.log(divider(chalk.dim) + '\n');
 
               displaySuccess('Plan generated!');
               console.log('');
@@ -491,12 +482,12 @@ Output: file:line, issue, risk, fix.`;
               console.log(chalk.gray('\nThe codebase appears secure. Consider regular security audits.'));
             }
 
-            console.log('\n' + chalk.dim('─'.repeat(terminalWidth)));
+            console.log(divider(chalk.dim));
             const tokensDisplay = securityReport.tokensUsed
-              ? ` • Tokens: ${(securityReport.tokensUsed / 1000).toFixed(1)}k`
+              ? `Tokens: ${(securityReport.tokensUsed / 1000).toFixed(1)}k`
               : '';
-            console.log(chalk.dim(`Model: ${config.model}${tokensDisplay}`));
-            console.log(chalk.bold.red('━'.repeat(terminalWidth)) + '\n');
+            console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(tokensDisplay)));
+            console.log(divider(chalk.dim) + '\n');
 
             displaySuccess('Security scan complete!');
             console.log('');
@@ -511,13 +502,7 @@ Output: file:line, issue, risk, fix.`;
         // Handle clear
         if (input === '/clear') {
           console.clear();
-          console.log(chalk.bold.cyan('\n╔═══════════════════════════════════════════╗'));
-          console.log(chalk.bold.cyan('║           ') + chalk.bold.white('plnr') + chalk.bold.cyan(' - Plan First           ║'));
-          console.log(chalk.bold.cyan('╚═══════════════════════════════════════════╝'));
-          console.log(chalk.dim('\n  Plan before implementation\n'));
-          console.log(chalk.gray(`  Model: ${config.model} (via OpenRouter)`));
-          console.log(chalk.gray('  Commands: /plan | /export | /cc | /codex | /security-check | /exit'));
-          console.log(chalk.gray('  Use @ to mention files (e.g., @src/index.ts)\n'));
+          displayWelcome(VERSION, config.model);
 
           // Reset state
           currentPlan = null;
@@ -606,16 +591,14 @@ Output: file:line, issue, risk, fix.`;
             conversationHistory.push({ task, plan: currentPlan });
 
             // Step 3: Display results
-            const planTerminalWidth = process.stdout.columns || 80;
-            console.log('\n' + chalk.bold.white('━'.repeat(planTerminalWidth)));
             displayPlan(currentPlan);
 
-            console.log('\n' + chalk.dim('─'.repeat(planTerminalWidth)));
+            console.log(divider(chalk.dim));
             const planTokensDisplay = currentPlan.tokensUsed
-              ? ` • Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
+              ? `Tokens: ${(currentPlan.tokensUsed / 1000).toFixed(1)}k`
               : '';
-            console.log(chalk.dim(`Model: ${config.model}${planTokensDisplay}`));
-            console.log(chalk.bold.white('━'.repeat(planTerminalWidth)) + '\n');
+            console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(planTokensDisplay)));
+            console.log(divider(chalk.dim) + '\n');
             displaySuccess('Plan generated! Type /export to save, or continue chatting.');
             console.log('');
           } catch (error: any) {
@@ -642,11 +625,11 @@ Output: file:line, issue, risk, fix.`;
           // Add to history
           conversationHistory.push({ task: input, plan: response });
 
-          // Step 3: Display results
+          // Step 3: Display results with markdown formatting
           const terminalWidth = process.stdout.columns || 80;
           console.log('\n' + chalk.bold.white('━'.repeat(terminalWidth)));
           console.log(chalk.bold.green('\n✨ Response:\n'));
-          console.log(response.summary);
+          console.log(renderMarkdown(response.summary));
 
           if (response.steps && response.steps.length > 0) {
             console.log('\n' + chalk.bold.yellow('💡 Suggestions:'));
@@ -655,12 +638,12 @@ Output: file:line, issue, risk, fix.`;
             });
           }
 
-          console.log('\n' + chalk.dim('─'.repeat(terminalWidth)));
+          console.log('\n' + divider(chalk.dim));
           const tokensDisplay = response.tokensUsed
-            ? ` • Tokens: ${(response.tokensUsed / 1000).toFixed(1)}k`
+            ? `Tokens: ${(response.tokensUsed / 1000).toFixed(1)}k`
             : '';
-          console.log(chalk.dim(`Model: ${config.model} ${tokensDisplay}`));
-          console.log(chalk.bold.white('━'.repeat(terminalWidth)) + '\n');
+          console.log(justifyText(chalk.dim(`Model: ${config.model}`), chalk.dim(tokensDisplay)));
+          console.log(divider(chalk.dim) + '\n');
         } catch (error: any) {
           console.log('\n');
           displayError(error.message || 'An error occurred');
