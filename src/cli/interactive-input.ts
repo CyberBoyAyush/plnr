@@ -34,6 +34,16 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     let selectedIndex = 0;
     let showMenu = false;
 
+    // Border box configuration
+    const PADDING_LEFT = 1;
+    const PADDING_RIGHT = 2;
+    const BORDER_CHAR_HORIZONTAL = '─';
+    const BORDER_CHAR_VERTICAL = '│';
+    const BORDER_CHAR_TOP_LEFT = '╭';
+    const BORDER_CHAR_TOP_RIGHT = '╮';
+    const BORDER_CHAR_BOTTOM_LEFT = '╰';
+    const BORDER_CHAR_BOTTOM_RIGHT = '╯';
+
     // Setup readline for raw input
     readline.emitKeypressEvents(process.stdin);
     if (process.stdin.isTTY) {
@@ -98,11 +108,18 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     };
 
     let lastMenuLines = 0;
+    let lastBoxLines = 0;
+    let lastCursorLine = 0; // Track which line the cursor is on
 
     const render = () => {
       const termWidth = process.stdout.columns || 80;
-      const totalLength = visiblePromptLength + inputBuffer.length;
-      const inputLines = Math.ceil(totalLength / termWidth);
+      const contentWidth = termWidth - 2 - PADDING_LEFT - PADDING_RIGHT; // 2 for left/right borders
+      const fullText = promptText + inputBuffer;
+      const visibleFullLength = stripAnsi(fullText).length;
+      
+      // Calculate how many lines we need for wrapped text
+      const contentLines = Math.max(1, Math.ceil(visibleFullLength / contentWidth));
+      const totalBoxLines = contentLines + 2; // +2 for top and bottom borders
 
       // Clear previous menu if it exists
       if (lastMenuLines > 0) {
@@ -113,16 +130,80 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         readline.moveCursor(process.stdout, 0, -lastMenuLines);
       }
 
-      // Clear input lines
-      readline.cursorTo(process.stdout, 0);
-      for (let i = 0; i < inputLines; i++) {
-        readline.clearLine(process.stdout, 0);
-        if (i < inputLines - 1) readline.moveCursor(process.stdout, 0, 1);
+      // Clear previous box by moving cursor back and clearing lines
+      if (lastBoxLines > 0) {
+        // Cursor is currently at lastCursorLine within the box
+        // Move to the top of the box
+        readline.cursorTo(process.stdout, 0);
+        readline.moveCursor(process.stdout, 0, -lastCursorLine);
+        
+        // Clear all lines of the box
+        for (let i = 0; i < lastBoxLines; i++) {
+          readline.clearLine(process.stdout, 0);
+          if (i < lastBoxLines - 1) {
+            readline.moveCursor(process.stdout, 0, 1);
+          }
+        }
+        
+        // Move cursor back to top
+        readline.moveCursor(process.stdout, 0, -(lastBoxLines - 1));
+        readline.cursorTo(process.stdout, 0);
       }
-      if (inputLines > 1) readline.moveCursor(process.stdout, 0, -(inputLines - 1));
 
+      // Draw top border
+      const topBorder = BORDER_CHAR_TOP_LEFT + BORDER_CHAR_HORIZONTAL.repeat(termWidth - 2) + BORDER_CHAR_TOP_RIGHT;
+      process.stdout.write(chalk.gray(topBorder));
+
+      // Prepare content with word wrapping
+      let remainingText = fullText;
+      let remainingVisible = stripAnsi(fullText);
+      
+      for (let line = 0; line < contentLines; line++) {
+        // Move to next line
+        readline.moveCursor(process.stdout, 0, 1);
+        readline.cursorTo(process.stdout, 0);
+        
+        const leftBorder = chalk.gray(BORDER_CHAR_VERTICAL) + ' '.repeat(PADDING_LEFT);
+        const rightBorder = ' '.repeat(PADDING_RIGHT) + chalk.gray(BORDER_CHAR_VERTICAL);
+        
+        // Extract text for this line
+        let lineText = '';
+        let visibleLength = 0;
+        let charIndex = 0;
+        let textIndex = 0;
+        
+        while (visibleLength < contentWidth && textIndex < remainingText.length) {
+          // Check if we're in an ANSI code
+          if (remainingText[textIndex] === '\x1b') {
+            // Find the end of ANSI code
+            let ansiEnd = textIndex;
+            while (ansiEnd < remainingText.length && remainingText[ansiEnd] !== 'm') {
+              ansiEnd++;
+            }
+            ansiEnd++; // Include the 'm'
+            lineText += remainingText.substring(textIndex, ansiEnd);
+            textIndex = ansiEnd;
+          } else {
+            lineText += remainingText[textIndex];
+            visibleLength++;
+            textIndex++;
+          }
+        }
+        
+        const padding = ' '.repeat(Math.max(0, contentWidth - stripAnsi(lineText).length));
+        process.stdout.write(leftBorder + lineText + padding + rightBorder);
+        
+        // Update remaining text
+        remainingText = remainingText.substring(textIndex);
+      }
+
+      // Draw bottom border
+      readline.moveCursor(process.stdout, 0, 1);
       readline.cursorTo(process.stdout, 0);
-      process.stdout.write(promptText + inputBuffer);
+      const bottomBorder = BORDER_CHAR_BOTTOM_LEFT + BORDER_CHAR_HORIZONTAL.repeat(termWidth - 2) + BORDER_CHAR_BOTTOM_RIGHT;
+      process.stdout.write(chalk.gray(bottomBorder));
+
+      lastBoxLines = totalBoxLines;
 
       // Show menu if needed
       if (showMenu && suggestions.length > 0) {
@@ -160,16 +241,29 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         lastMenuLines = 0;
       }
 
-      // Position cursor accounting for wrapping
-      const cursorLine = Math.floor((visiblePromptLength + cursorPosition) / termWidth);
-      const cursorCol = (visiblePromptLength + cursorPosition) % termWidth;
+      // Position cursor within the bordered box
+      const cursorOffset = visiblePromptLength + cursorPosition;
+      const cursorLine = Math.floor(cursorOffset / contentWidth);
+      const cursorCol = cursorOffset % contentWidth;
+      
+      // The cursor line we want to be on (1 for top border, then cursorLine content lines)
+      const targetLineInBox = 1 + cursorLine;
+      
+      // Move cursor from bottom border to the correct content line
+      // Bottom border is at line (totalBoxLines - 1), we want line targetLineInBox
       readline.cursorTo(process.stdout, 0);
-      if (cursorLine > 0) readline.moveCursor(process.stdout, 0, cursorLine);
-      readline.moveCursor(process.stdout, cursorCol, 0);
+      readline.moveCursor(process.stdout, 0, -(totalBoxLines - 1 - targetLineInBox));
+      readline.moveCursor(process.stdout, 1 + PADDING_LEFT + cursorCol, 0);
+      
+      // Remember where the cursor is for next render
+      lastCursorLine = targetLineInBox;
     };
 
-    const handleKeypress = (_str: string, key: readline.Key) => {
+    const handleKeypress = (str: string, key: readline.Key) => {
       if (!key) return;
+
+      // Debug: log key info (remove this later)
+      // console.log('\nKey:', JSON.stringify({ name: key.name, ctrl: key.ctrl, meta: key.meta, shift: key.shift, sequence: key.sequence }));
 
       // Handle Ctrl+C
       if (key.ctrl && key.name === 'c') {
@@ -227,9 +321,32 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         }
       }
 
+      // Handle Ctrl+A: beginning of line
+      if (key.ctrl && key.name === 'a') {
+        cursorPosition = 0;
+        render();
+        return;
+      }
+
+      // Handle Ctrl+E: end of line
+      if (key.ctrl && key.name === 'e') {
+        cursorPosition = inputBuffer.length;
+        render();
+        return;
+      }
+
       // Handle left/right arrow keys for cursor movement
       if (key.name === 'left') {
-        if (cursorPosition > 0) {
+        if (key.meta) {
+          // Alt/Option + Left: Move to previous word
+          if (cursorPosition > 0) {
+            let pos = cursorPosition - 1;
+            while (pos > 0 && inputBuffer[pos] === ' ') pos--;
+            while (pos > 0 && inputBuffer[pos - 1] !== ' ') pos--;
+            cursorPosition = pos;
+            render();
+          }
+        } else if (cursorPosition > 0) {
           cursorPosition--;
           render();
         }
@@ -237,16 +354,65 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
       }
 
       if (key.name === 'right') {
-        if (cursorPosition < inputBuffer.length) {
+        if (key.meta) {
+          // Alt/Option + Right: Move to next word
+          if (cursorPosition < inputBuffer.length) {
+            let pos = cursorPosition;
+            while (pos < inputBuffer.length && inputBuffer[pos] !== ' ') pos++;
+            while (pos < inputBuffer.length && inputBuffer[pos] === ' ') pos++;
+            cursorPosition = pos;
+            render();
+          }
+        } else if (cursorPosition < inputBuffer.length) {
           cursorPosition++;
           render();
         }
         return;
       }
 
-      // Handle Backspace
-      if (key.name === 'backspace') {
+      // Handle Ctrl+U: Clear entire line
+      if (key.ctrl && key.name === 'u') {
+        inputBuffer = '';
+        cursorPosition = 0;
+        suggestions = getSuggestions(inputBuffer);
+        showMenu = suggestions.length > 0;
+        selectedIndex = 0;
+        render();
+        return;
+      }
+
+      // Handle Ctrl+W: Delete word before cursor
+      if (key.ctrl && key.name === 'w') {
         if (cursorPosition > 0) {
+          let pos = cursorPosition - 1;
+          while (pos > 0 && inputBuffer[pos] === ' ') pos--;
+          while (pos > 0 && inputBuffer[pos - 1] !== ' ') pos--;
+          inputBuffer = inputBuffer.slice(0, pos) + inputBuffer.slice(cursorPosition);
+          cursorPosition = pos;
+          suggestions = getSuggestions(inputBuffer);
+          showMenu = suggestions.length > 0;
+          selectedIndex = 0;
+          render();
+        }
+        return;
+      }
+
+      // Handle Backspace (including Alt+Backspace for word delete)
+      if (key.name === 'backspace') {
+        if (key.meta) {
+          // Alt/Option + Backspace: Delete word before cursor
+          if (cursorPosition > 0) {
+            let pos = cursorPosition - 1;
+            while (pos > 0 && inputBuffer[pos] === ' ') pos--;
+            while (pos > 0 && inputBuffer[pos - 1] !== ' ') pos--;
+            inputBuffer = inputBuffer.slice(0, pos) + inputBuffer.slice(cursorPosition);
+            cursorPosition = pos;
+            suggestions = getSuggestions(inputBuffer);
+            showMenu = suggestions.length > 0;
+            selectedIndex = 0;
+            render();
+          }
+        } else if (cursorPosition > 0) {
           inputBuffer = inputBuffer.slice(0, cursorPosition - 1) + inputBuffer.slice(cursorPosition);
           cursorPosition--;
           suggestions = getSuggestions(inputBuffer);
@@ -293,9 +459,7 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
 
     process.stdin.on('keypress', handleKeypress);
 
-    // Initial render - just show prompt
-    readline.cursorTo(process.stdout, 0);
-    readline.clearLine(process.stdout, 0);
-    process.stdout.write(promptText);
+    // Initial render - show bordered box
+    render();
   });
 }
