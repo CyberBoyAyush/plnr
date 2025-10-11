@@ -7,7 +7,7 @@ import { markedTerminal } from 'marked-terminal';
 marked.use(markedTerminal({
   code: chalk.white,
   blockquote: chalk.dim.italic,
-  heading: chalk.bold.white,
+  heading: chalk.bold.green, // more readable section headers
   list: chalk.white,
   listitem: chalk.white,
   strong: chalk.bold.white,
@@ -25,50 +25,45 @@ export function renderMarkdown(markdown: string): string {
 }
 
 export function displayPlan(plan: Plan): void {
-  console.log('\n' + chalk.bold.white('📋 Implementation Plan') + '\n');
-  console.log(chalk.bold.white('Summary:'));
-  console.log('  ' + chalk.white(plan.summary) + '\n');
-
-  console.log(chalk.bold.white('Steps:'));
-  plan.steps.forEach((step, index) => {
-    console.log(chalk.white(`\n  ${index + 1}. ${step.title}`));
-    console.log(chalk.dim('     ' + step.description));
-
-    if (step.files_to_modify.length > 0) {
-      console.log(chalk.dim('     Modify: ' + step.files_to_modify.join(', ')));
-    }
-    if (step.files_to_create.length > 0) {
-      console.log(chalk.dim('     Create: ' + step.files_to_create.join(', ')));
-    }
-  });
-
+  const md: string[] = [];
+  md.push('# 📋 Implementation Plan');
+  md.push('');
+  md.push('## Summary');
+  md.push(plan.summary.trim());
+  md.push('');
+  if (plan.steps.length > 0) {
+    md.push('## Steps');
+    plan.steps.forEach((s, i) => {
+      md.push(`- **${i + 1}. ${s.title}**`);
+      if (s.description) md.push(`  - ${s.description}`);
+      if (s.files_to_modify?.length) md.push(`  - Modify: ${s.files_to_modify.join(', ')}`);
+      if (s.files_to_create?.length) md.push(`  - Create: ${s.files_to_create.join(', ')}`);
+    });
+    md.push('');
+  }
   if (plan.dependencies_to_add.length > 0) {
-    console.log('\n' + chalk.bold.white('📦 Dependencies:'));
-    plan.dependencies_to_add.forEach(dep => {
-      console.log(chalk.white('  • ' + dep));
-    });
+    md.push('## Dependencies');
+    plan.dependencies_to_add.forEach(dep => md.push(`- ${dep}`));
+    md.push('');
   }
-
   if (plan.risks.length > 0) {
-    console.log('\n' + chalk.bold.white('⚠️  Risks:'));
-    plan.risks.forEach(risk => {
-      console.log(chalk.dim('  • ' + risk));
-    });
+    md.push('## Risks');
+    plan.risks.forEach(r => md.push(`- ${r}`));
+    md.push('');
   }
-
-  console.log('');
+  console.log('\n' + renderMarkdown(md.join('\n')));
 }
 
 export function displaySuccess(message: string): void {
-  console.log(chalk.white('✓ ' + message));
+  console.log(chalk.green('✓ ') + chalk.white(message));
 }
 
 export function displayError(message: string): void {
-  console.error(chalk.white('✗ ' + message));
+  console.error(chalk.red('✗ ') + chalk.white(message));
 }
 
 export function displayInfo(message: string): void {
-  console.log(chalk.white('→ ' + message));
+  console.log(chalk.cyan('→ ') + chalk.white(message));
 }
 
 // Center text in terminal

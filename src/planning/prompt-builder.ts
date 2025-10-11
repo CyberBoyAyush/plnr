@@ -1,10 +1,15 @@
 import { CodebaseContext, Plan } from '../types/index.js';
 
+// System prompt for planning mode
+export function getPlanningSystemPrompt(): string {
+  return 'You are an expert software architect. Use the provided tools to explore and analyze the codebase thoroughly. Search for relevant files, read code, and gather information before creating your implementation plan. Use web_search or get_code_context when you need current information, documentation, or examples not in the codebase. Be specific, thorough, and practical. Always respond with valid JSON only when providing the final plan.';
+}
+
+// User prompt for planning mode
 export function buildPlanningPrompt(
   context: CodebaseContext,
   task: string,
-  conversationHistory: Array<{task: string, plan: Plan}> = [],
-  isPlanning: boolean = true
+  conversationHistory: Array<{task: string, plan: Plan}> = []
 ): string {
   const filesContext = context.relevantFiles
     .map(file => {
@@ -23,50 +28,6 @@ export function buildPlanningPrompt(
         `### Exchange ${i + 1}\n**User:** ${item.task}\n**Summary:** ${item.plan.summary}`
       ).join('\n\n')}\n`
     : '';
-
-  if (!isPlanning) {
-    // Chat mode - conversational
-    return `You are an expert software architect helping a developer with their project.
-
-## Project Context
-- **Language**: ${context.language}
-- **Framework**: ${context.framework || 'Vanilla ' + context.language}
-- **Dependencies**: ${dependencyList}
-
-## Project Files
-${filesContext}
-
-${historyContext}
-
-## User Question
-${task}
-
-## Your Task
-Provide a helpful, conversational response to the user's question. Be concise but informative.
-
-If they're asking about implementation:
-- Give specific guidance
-- Reference actual files in their project
-- Suggest concrete next steps
-
-Respond in JSON format:
-{
-  "summary": "Your conversational response (2-4 sentences)",
-  "steps": [
-    {
-      "title": "Quick suggestion or next step",
-      "description": "Brief explanation",
-      "files_to_modify": [],
-      "files_to_create": [],
-      "code_changes": ""
-    }
-  ],
-  "dependencies_to_add": [],
-  "risks": []
-}
-
-**Output valid JSON only. No markdown, no explanations.**`;
-  }
 
   // Planning mode - detailed implementation plan
   return `# Task
