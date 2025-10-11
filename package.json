@@ -1,6 +1,6 @@
 {
   "name": "plnr",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Plan before implementation - AI-powered planning for your codebase",
   "type": "module",
   "bin": {
@@ -37,29 +37,17 @@
   },
   "packageManager": "pnpm@10.17.1",
   "dependencies": {
-    "@inquirer/prompts": "^7.8.6",
-    "@types/marked-terminal": "^6.1.1",
-    "boxen": "^8.0.1",
     "chalk": "^5.0.0",
     "commander": "^12.0.0",
     "dotenv": "^16.0.0",
     "fuse.js": "^7.1.0",
-    "fuzzysort": "^3.1.0",
     "glob": "^10.0.0",
-    "ink": "^4.0.0",
-    "ink-select-input": "^5.0.0",
-    "ink-text-input": "^5.0.0",
-    "inquirer": "^12.9.6",
-    "inquirer-autocomplete-prompt": "^3.0.1",
     "marked": "^16.4.0",
-    "marked-terminal": "^7.3.0",
     "openai": "^4.0.0",
-    "ora": "^9.0.0",
-    "react": "^18.3.1"
+    "ora": "^9.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/react": "^18.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }
