@@ -12,7 +12,7 @@ import { validateConfig, config } from './config.js';
 import { gatherContext } from './context/gatherer.js';
 import { generatePlan } from './planning/planner.js';
 import { exportPRD } from './exporters/prd-writer.js';
-import { displayPlan, displaySuccess, displayError, displayInfo, renderMarkdown, displayWelcome, justifyText, divider } from './cli/output.js';
+import { displayPlan, displaySuccess, displayError, displayInfo, renderMarkdown, displayWelcome, justifyText, divider, displayMarkdownPanel } from './cli/output.js';
 import { Plan, CodebaseContext } from './types/index.js';
 import chalk from 'chalk';
 import { glob } from 'glob';
@@ -676,10 +676,7 @@ Output: file:line, issue, risk, fix.`;
             conversationHistory.push({ task: input, plan: response });
 
             // Display chat response with markdown formatting
-            const terminalWidth = process.stdout.columns || 80;
-            console.log('\n' + chalk.bold.white('━'.repeat(terminalWidth)));
-            console.log(chalk.bold.green('\n✨ Response:\n'));
-            console.log(renderMarkdown(response.summary));
+            displayMarkdownPanel('✨ Response:', response.summary, 2);
 
             if (response.steps && response.steps.length > 0) {
               console.log('\n' + chalk.bold.yellow('💡 Suggestions:'));

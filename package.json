@@ -1,6 +1,6 @@
 {
   "name": "plnr",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Plan before implementation - AI-powered planning for your codebase",
   "type": "module",
   "bin": {
@@ -39,6 +39,7 @@
   "dependencies": {
     "@inquirer/prompts": "^7.8.6",
     "@types/marked-terminal": "^6.1.1",
+    "boxen": "^8.0.1",
     "chalk": "^5.0.0",
     "commander": "^12.0.0",
     "dotenv": "^16.0.0",
