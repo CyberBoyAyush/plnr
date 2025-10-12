@@ -326,6 +326,7 @@ export function displayWelcome(version: string, model: string): void {
 
   // Commands in one line
   console.log(centerText(chalk.white('/plan') + chalk.dim(' | ') + chalk.white('/export') + chalk.dim(' | ') + chalk.white('/cc') + chalk.dim(' | ') + chalk.white('/clear'), terminalWidth));
+  console.log(centerText(chalk.dim('Tip: Press Ctrl+J for a new line in the prompt'), terminalWidth));
 
   console.log('\n');
 }
