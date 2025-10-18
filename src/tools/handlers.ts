@@ -5,6 +5,7 @@ import { join } from 'path';
 import { glob } from 'glob';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
+import { todoManager, Todo } from '../utils/todo-manager.js';
 
 const execAsync = promisify(exec);
 
@@ -249,10 +250,45 @@ export async function handleGetCodeContext(query: string): Promise<ToolCallResul
   }
 }
 
+export async function handleCreateTodos(
+  sessionId: string,
+  todos: Todo[]
+): Promise<ToolCallResult> {
+  try {
+    todoManager.createTodos(sessionId, todos);
+    return {
+      success: true,
+      result: `Created ${todos.length} tasks`
+    };
+  } catch (error: any) {
+    return { success: false, error: 'Failed to create todos' };
+  }
+}
+
+export async function handleUpdateTodo(
+  sessionId: string,
+  todoId: string,
+  status: Todo['status']
+): Promise<ToolCallResult> {
+  try {
+    const updated = todoManager.updateTodo(sessionId, todoId, status);
+    if (!updated) {
+      return { success: false, error: 'Todo not found' };
+    }
+    return {
+      success: true,
+      result: `Updated task to ${status}`
+    };
+  } catch (error: any) {
+    return { success: false, error: 'Failed to update todo' };
+  }
+}
+
 export async function executeToolCall(
   toolName: string,
   args: any,
-  projectRoot: string
+  projectRoot: string,
+  sessionId?: string
 ): Promise<ToolCallResult> {
   switch (toolName) {
     case 'read_file':
@@ -277,6 +313,12 @@ export async function executeToolCall(
 
     case 'get_code_context':
       return handleGetCodeContext(args.query);
+
+    case 'create_todos':
+      return handleCreateTodos(sessionId || 'default', args.todos);
+
+    case 'update_todo':
+      return handleUpdateTodo(sessionId || 'default', args.todo_id, args.status);
 
     default:
       return {

@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { Plan } from '../types/index.js';
 import { marked, Tokens, type Token } from 'marked';
+import { Todo } from '../utils/todo-manager.js';
 
 const uiWidth = Math.max(40, Math.min(100, (process.stdout.columns || 80) - 8));
 const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
@@ -329,4 +330,26 @@ export function displayWelcome(version: string, model: string): void {
   console.log(centerText(chalk.dim('Tip: Press Ctrl+J for a new line in the prompt'), terminalWidth));
 
   console.log('\n');
+}
+
+export function displayTodos(todos: { id: string; title: string; status: 'pending' | 'in_progress' | 'completed' }[]): void {
+  if (todos.length === 0) return;
+
+  console.log('\n' + chalk.dim('📋 ') + chalk.bold('Tasks'));
+  
+  todos.forEach(todo => {
+    const statusIcon = todo.status === 'completed' 
+      ? chalk.green('✓') 
+      : todo.status === 'in_progress' 
+      ? chalk.yellow('→')
+      : chalk.dim('○');
+    
+    const titleStyle = todo.status === 'completed' 
+      ? chalk.dim.strikethrough 
+      : todo.status === 'in_progress'
+      ? chalk.white
+      : chalk.dim;
+    
+    console.log(`  ${statusIcon} ${titleStyle(todo.title)}`);
+  });
 }
