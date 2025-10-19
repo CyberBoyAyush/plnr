@@ -571,7 +571,9 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
           console.log('');
           displayInfo('Keyboard shortcuts:');
           console.log('  Ctrl+C         - Exit plnr');
+          console.log('  Ctrl+P         - Enhance prompt (make it more specific and actionable)');
           console.log('  Tab            - Autocomplete commands and files');
+          console.log('  Shift+Tab      - Switch between Chat and Plan modes');
           console.log('  ESC            - Cancel current AI request');
           console.log('');
           displayInfo('Usage:');

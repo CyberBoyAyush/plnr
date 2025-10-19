@@ -1,6 +1,7 @@
 import * as readline from 'readline';
 import chalk from 'chalk';
 import Fuse from 'fuse.js';
+import { enhancePrompt } from '../utils/prompt-enhancer.js';
 
 interface Command {
   name: string;
@@ -42,6 +43,7 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     let selectedIndex = 0;
     let showMenu = false;
     let currentMode: InputMode = initialMode || 'chat'; // Default to chat mode, or use passed mode
+    let isEnhancing = false; // Track if we're currently enhancing
 
     // Border box configuration
     const PADDING_LEFT = 1;
@@ -280,9 +282,14 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
       // Display mode indicator below the box
       readline.moveCursor(process.stdout, 0, 1);
       readline.cursorTo(process.stdout, 0);
-      const modeText = currentMode === 'plan' 
-        ? chalk.cyan('  Mode: ') + chalk.bold.cyan('Plan') + chalk.gray(' (Shift+Tab to switch)')
-        : chalk.magenta('  Mode: ') + chalk.bold.magenta('Chat') + chalk.gray(' (Shift+Tab to switch)');
+      let modeText;
+      if (isEnhancing) {
+        modeText = chalk.yellow('  ⚡ Enhancing prompt...');
+      } else {
+        modeText = currentMode === 'plan'
+          ? chalk.cyan('  Mode: ') + chalk.bold.cyan('Plan') + chalk.gray(' (Shift+Tab to switch, Ctrl+P to enhance)')
+          : chalk.magenta('  Mode: ') + chalk.bold.magenta('Chat') + chalk.gray(' (Shift+Tab to switch, Ctrl+P to enhance)');
+      }
       process.stdout.write(modeText);
       
       // Now cursor is at the END of mode line (last line rendered)
@@ -372,6 +379,66 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         cleanup();
         process.stdout.write('\n');
         process.exit(0);
+      }
+
+      // Handle Ctrl+P - Enhance prompt
+      if (key.ctrl && key.name === 'p') {
+        // Only enhance if there's input
+        if (inputBuffer.trim().length === 0) {
+          return;
+        }
+
+        // Don't enhance commands
+        if (inputBuffer.trim().startsWith('/')) {
+          return;
+        }
+
+        // Don't enhance if already enhancing
+        if (isEnhancing) {
+          return;
+        }
+
+        // Save original input
+        const originalInput = inputBuffer;
+
+        // Set enhancing flag and show status in mode line
+        isEnhancing = true;
+        showMenu = false;
+        render();
+
+        // Temporarily disable keypress handling during enhancement
+        process.stdin.removeListener('keypress', handleKeypress);
+
+        enhancePrompt(originalInput)
+          .then((enhanced) => {
+            // Update input buffer with enhanced text
+            inputBuffer = enhanced;
+            // Place cursor at the end so user can immediately edit/add more
+            cursorPosition = enhanced.length;
+            isEnhancing = false;
+            updateSuggestionsState();
+
+            // Re-enable keypress handling
+            process.stdin.on('keypress', handleKeypress);
+
+            // Render the enhanced prompt
+            render();
+          })
+          .catch((error) => {
+            // On error, restore original input
+            inputBuffer = originalInput;
+            cursorPosition = originalInput.length;
+            isEnhancing = false;
+            updateSuggestionsState();
+
+            // Re-enable keypress handling
+            process.stdin.on('keypress', handleKeypress);
+
+            // Render with original text
+            render();
+          });
+
+        return;
       }
 
       if (key.ctrl && (key.name === 'j' || key.sequence === '\n')) {
