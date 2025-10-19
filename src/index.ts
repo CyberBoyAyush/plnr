@@ -19,6 +19,7 @@ import { glob } from 'glob';
 import Fuse from 'fuse.js';
 import { getInteractiveInput } from './cli/interactive-input.js';
 import { logger } from './utils/logger.js';
+import { getSecurityAuditPrompt } from './security/prompt-builder.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { createRequire } from 'module';
@@ -35,7 +36,7 @@ const COMMANDS = [
   { name: '/export', description: 'Export the current plan as markdown' },
   { name: '/cc', description: 'Start Claude Code with current context' },
   { name: '/codex', description: 'Start Codex CLI with current context' },
-  { name: '/security-check', description: 'Run security scan on codebase' },
+  { name: '/security-check', description: 'Run comprehensive security audit (OWASP Top 10)' },
   { name: '/clear', description: 'Clear conversation and start fresh' },
   { name: '/help', description: 'Show available commands' },
   { name: '/exit', description: 'Exit plnr' },
@@ -424,9 +425,7 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
         if (input === '/security-check') {
           try {
             console.log('');
-            displayInfo('Running security scan...');
-            console.log('');
-            console.log(chalk.dim('🔍 Scanning for critical vulnerabilities...\n'));
+            console.log(chalk.dim('⚡ Running comprehensive security audit...'));
 
             // Minimal context - just project structure, no file contents
             const minimalContext: CodebaseContext = {
@@ -438,56 +437,86 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
               fileTree: ''
             };
 
-            // Ultra-short security prompt optimized for <250K tokens
-            const securityPrompt = `Security scan - CRITICAL issues only:
-
-1. Hardcoded secrets (search: API_KEY, SECRET, PASSWORD, TOKEN in source files)
-2. Auth issues
-3. SQL/XSS injection
-4. Insecure endpoints
-
-SKIP: .env files (already secure)
-Max 10-15 tool calls. Search first, read only suspicious files.
-Output: file:line, issue, risk, fix.`;
+            // Get comprehensive security audit prompt
+            const securityPrompt = getSecurityAuditPrompt();
 
             const securityReport = await generatePlan(minimalContext, securityPrompt, [], false);
 
-            // Display results with better formatting
-            const terminalWidth = process.stdout.columns || 80;
-            console.log('\n' + chalk.bold.red('━'.repeat(terminalWidth)));
-            console.log(chalk.bold.red('\n🛡️  SECURITY SCAN REPORT\n'));
+            // Parse and display results with minimal formatting
+            const reportText = securityReport.summary;
+            const isClean = reportText.includes('NO CRITICAL VULNERABILITIES') || reportText.includes('No critical security issues');
 
-            // Parse and format the findings
-            const findings = securityReport.summary.split(/\n(?=\.\/)/); // Split by file paths
+            if (isClean) {
+              // Clean report - no vulnerabilities
+              const md: string[] = [];
+              md.push('## Scan Results');
+              md.push('✓ No critical vulnerabilities detected');
+              md.push('');
+              md.push('## Recommendations');
+              md.push('- Regular dependency updates');
+              md.push('- Periodic security audits');
+              md.push('- Review access logs regularly');
 
-            if (findings.length > 0 && findings[0].trim()) {
-              findings.forEach((finding, index) => {
-                const match = finding.match(/^(\.\/[^,]+):(\d+),\s*([^,]+),\s*([^,]+),\s*(.+)$/);
+              displayMarkdownPanel('🔒 Security Audit', md.join('\n'), 2);
+            } else {
+              // Parse findings
+              const lines = reportText.split('\n');
+              const findings: Array<{file: string, line: string, type: string, severity: string, description: string, fix: string}> = [];
 
+              lines.forEach(line => {
+                const match = line.match(/^(\.\/[^:]+):(\d+),\s*\[?([^\],]+)\]?,\s*\[?([^\],]+)\]?,\s*([^,]+),\s*(.+)$/);
                 if (match) {
-                  const [, file, line, issue, risk, fix] = match;
-
-                  // Risk level coloring
-                  let riskColor = chalk.yellow;
-                  if (risk.toLowerCase().includes('critical')) riskColor = chalk.red.bold;
-                  else if (risk.toLowerCase().includes('high')) riskColor = chalk.red;
-                  else if (risk.toLowerCase().includes('medium')) riskColor = chalk.yellow;
-                  else if (risk.toLowerCase().includes('low')) riskColor = chalk.blue;
-
-                  console.log(chalk.cyan(`\n${index + 1}. ${file}:${line}`));
-                  console.log(chalk.white(`   Issue: ${issue.trim()}`));
-                  console.log(riskColor(`   Risk:  ${risk.trim()}`));
-                  console.log(chalk.gray(`   Fix:   ${fix.trim()}`));
-                } else {
-                  // Fallback for non-standard format
-                  if (finding.trim()) {
-                    console.log('\n' + chalk.white(finding.trim()));
-                  }
+                  const [, file, lineNum, type, severity, description, fix] = match;
+                  findings.push({
+                    file: file.trim(),
+                    line: lineNum.trim(),
+                    type: type.trim(),
+                    severity: severity.trim().toUpperCase(),
+                    description: description.trim(),
+                    fix: fix.trim()
+                  });
                 }
               });
-            } else {
-              console.log(chalk.green('\n✓ No critical security issues found!'));
-              console.log(chalk.gray('\nThe codebase appears secure. Consider regular security audits.'));
+
+              if (findings.length > 0) {
+                // Build markdown report
+                const md: string[] = [];
+
+                // Summary counts
+                const severityCounts = {
+                  CRITICAL: findings.filter(f => f.severity === 'CRITICAL').length,
+                  HIGH: findings.filter(f => f.severity === 'HIGH').length,
+                  MEDIUM: findings.filter(f => f.severity === 'MEDIUM').length,
+                  LOW: findings.filter(f => f.severity === 'LOW').length,
+                };
+
+                md.push('## Summary');
+                const summaryParts: string[] = [];
+                if (severityCounts.CRITICAL > 0) summaryParts.push(`**${severityCounts.CRITICAL} Critical**`);
+                if (severityCounts.HIGH > 0) summaryParts.push(`${severityCounts.HIGH} High`);
+                if (severityCounts.MEDIUM > 0) summaryParts.push(`${severityCounts.MEDIUM} Medium`);
+                if (severityCounts.LOW > 0) summaryParts.push(`${severityCounts.LOW} Low`);
+                md.push(`Found ${findings.length} issue${findings.length > 1 ? 's' : ''}: ${summaryParts.join(', ')}`);
+                md.push('');
+
+                // Findings
+                md.push('## Findings');
+                findings.forEach((finding, idx) => {
+                  const severityLabel = finding.severity === 'CRITICAL' || finding.severity === 'HIGH'
+                    ? `**[${finding.severity}]**`
+                    : `[${finding.severity}]`;
+
+                  md.push(`- ${severityLabel} \`${finding.file}:${finding.line}\``);
+                  md.push(`  - **${finding.type}**: ${finding.description}`);
+                  md.push(`  - Fix: ${finding.fix}`);
+                  if (idx < findings.length - 1) md.push('');
+                });
+
+                displayMarkdownPanel('🔒 Security Audit', md.join('\n'), 2);
+              } else {
+                // Fallback to raw output
+                displayMarkdownPanel('🔒 Security Audit', reportText, 2);
+              }
             }
 
             console.log(divider(chalk.dim));
@@ -531,7 +560,7 @@ Output: file:line, issue, risk, fix.`;
           console.log('  /export           - Export the current plan as markdown');
           console.log('  /cc               - Launch Claude Code with gathered context');
           console.log('  /codex            - Launch Codex CLI with gathered context');
-          console.log('  /security-check   - Run security scan on codebase');
+          console.log('  /security-check   - Run comprehensive security audit (12 categories)');
           console.log('  /clear            - Clear conversation and start fresh');
           console.log('  /help             - Show this help message');
           console.log('  /exit             - Exit plnr');
@@ -549,7 +578,7 @@ Output: file:line, issue, risk, fix.`;
           console.log('  Just chat:  "How do I add authentication?"');
           console.log('  Make plan:  "/plan Add JWT authentication"');
           console.log('  With files: "/plan @src/auth.ts Add JWT to this file"');
-          console.log('  Security:   "/security-check" (scan for vulnerabilities)');
+          console.log('  Security:   "/security-check" (comprehensive audit)');
           console.log('  To Claude:  "/cc" (after gathering context)');
           console.log('  To Codex:   "/codex" (after gathering context)');
           console.log('');

@@ -1,71 +1,92 @@
-# plnr - Plan Before Implementation
+# plnr - Your AI-Powered Codebase Planning Assistant
 
 [![npm version](https://badge.fury.io/js/plnr.svg)](https://www.npmjs.com/package/plnr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> AI-powered planning tool for your codebase
+> Think before you code. Plan before you implement.
 
-## What is plnr?
+**plnr** is an intelligent CLI tool that understands your codebase, analyzes your project structure, and generates detailed implementation plans using advanced AI. Whether you're adding a new feature, refactoring code, or conducting security audits, plnr helps you make informed decisions with AI-powered insights.
 
-plnr analyzes your codebase, understands its structure, and generates detailed implementation plans for new features or changes. It's designed to work seamlessly with AI coding assistants by providing them with rich context and structured plans.
+## ✨ Why plnr?
 
-**Plan before implementation** - Make better decisions with AI-powered planning.
+Building software is complex. Before writing a single line of code, you need to:
+- Understand existing patterns and architecture
+- Identify files that need changes
+- Plan the implementation steps
+- Consider edge cases and risks
 
-## Features
+**plnr automates this entire process**, giving you detailed, actionable plans that save hours of manual analysis.
 
-- 🔍 **Smart Context Gathering**: Automatically analyzes your codebase structure, dependencies, and framework
-- 🤖 **AI-Powered Planning**: Generates detailed step-by-step implementation plans using OpenRouter
-- 🌐 **Web Search**: Integrated Exa search for up-to-date documentation and code examples
-- 📋 **PRD Export**: Export plans as structured markdown documents
-- 🎨 **Beautiful CLI**: Professional terminal UI with progress indicators and spinners
-- ⚡ **Fast & Efficient**: Focuses only on relevant files to avoid overwhelming context
-- 👁️ **Transparent**: Shows exactly which files are being read and analyzed
-- 🚀 **Real-time Feedback**: Step-by-step progress with visual indicators
+## 🚀 Key Features
 
-## Installation
+### 🧠 Intelligent Planning
+- **Smart Context Gathering**: Automatically analyzes your project structure, dependencies, and framework
+- **AI-Powered Plans**: Generates step-by-step implementation plans with specific file paths and code patterns
+- **Todo Management**: Tracks progress with interactive todo lists that update in real-time
+- **Chat & Plan Modes**: Ask questions about your codebase or generate detailed implementation plans
 
-### Install Globally via npm
+### 🔍 Deep Codebase Understanding
+- **File Search & Analysis**: Search patterns, read files, and explore directories
+- **Framework Detection**: Automatically detects Next.js, Express, React, Vue, and more
+- **Dependency Awareness**: Understands your project's dependencies and suggests appropriate packages
+- **Context-Aware**: Focuses only on relevant files to provide precise recommendations
+
+### 🛡️ Security First
+- **Comprehensive Security Audits**: Scan for OWASP Top 10 vulnerabilities
+- **12 Vulnerability Categories**: From secrets exposure to injection vulnerabilities
+- **Actionable Remediation**: Get specific fixes for each finding
+- **Risk Assessment**: Prioritized findings by severity (CRITICAL, HIGH, MEDIUM, LOW)
+
+### 🌐 Web-Enhanced Intelligence
+- **Exa Search Integration**: Find up-to-date documentation and code examples
+- **Context7 MCP**: Access latest library documentation and API references
+- **Smart Documentation Lookup**: Automatically searches for relevant docs when needed
+
+### 🎨 Professional Terminal Experience
+- **Beautiful CLI**: Modern, colorful terminal UI with progress indicators
+- **Real-time Feedback**: See exactly what the AI is analyzing as it works
+- **File Mentions**: Reference specific files with `@` syntax for targeted analysis
+- **Export to Markdown**: Save plans as structured PRD documents
+
+### 🔧 Advanced Features
+- **Dynamic Context Windows**: Automatically scales from 100K to 2M+ token contexts
+- **Multi-Model Support**: Works with GPT-5, Claude 4.5, Grok, Gemini, and more via OpenRouter
+- **Tool Calling**: AI can autonomously read files, search code, and gather context
+- **Error Recovery**: Intelligent error handling with automatic retries and corrections
+
+## 📦 Installation
+
+### Quick Install
 
 ```bash
 npm install -g plnr
 ```
 
-### Install Globally via pnpm
+### Alternative Package Managers
 
 ```bash
+# Using pnpm
 pnpm add -g plnr
+
+# Using yarn
+yarn global add plnr
 ```
 
-## Setup
+## ⚡ Quick Start
 
-### 1. Get API Keys
+### 1. Get Your API Keys
 
-- **OpenRouter API Key** (Required): Get from [OpenRouter](https://openrouter.ai/)
-- **Exa API Key** (Optional): Get from [Exa](https://exa.ai/) for web search features
+**Required:**
+- **OpenRouter API Key**: [Get it here](https://openrouter.ai/)
 
-### 2. Configure Environment Variables
+**Optional (but recommended):**
+- **Exa API Key**: [Get it here](https://exa.ai/) for web search features
 
-After installing globally, you need to set up your API keys. Choose one method:
+### 2. Configure Environment
 
-#### Option A: Add to Shell Profile (Recommended)
+**Option A: Quick One-Line Setup**
 
-Add these lines to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.profile`):
-
-```bash
-export OPENROUTER_API_KEY="sk-or-v1-xxxxx"
-export EXA_API_KEY="your-exa-api-key"  # Optional
-export MODEL="x-ai/grok-4-fast"  # Optional, defaults to grok-4-fast
-```
-
-Then reload your shell:
-
-```bash
-source ~/.zshrc  # or ~/.bashrc
-```
-
-#### Option B: One-Line Setup Command
-
-Run this command once to add to your shell profile:
+Run one of these commands to set up instantly:
 
 ```bash
 # For bash
@@ -77,206 +98,335 @@ echo 'export OPENROUTER_API_KEY="sk-or-v1-xxxxx"' >> ~/.zshrc && source ~/.zshrc
 
 Replace `sk-or-v1-xxxxx` with your actual API key.
 
-#### Option C: Set Per-Command
+**Option B: Manual Setup**
 
-Run `plnr` with environment variables inline:
-
-```bash
-OPENROUTER_API_KEY="sk-or-v1-xxxxx" plnr
-```
-
-### 3. Verify Installation
+Add these to your shell profile (`~/.zshrc`, `~/.bashrc`, or `~/.profile`):
 
 ```bash
-plnr --version
-```
-
-## Quick Start
-
-```bash
-# 1. Install globally
-npm install -g plnr
-
-# 2. Set your API key (choose one method)
 export OPENROUTER_API_KEY="sk-or-v1-xxxxx"
+export EXA_API_KEY="your-exa-api-key"  # Optional
+export MODEL="x-ai/grok-4-fast"  # Optional, default shown
+```
 
-# 3. Navigate to your project
-cd ~/my-project
+Then reload your shell:
 
-# 4. Run plnr
+```bash
+source ~/.zshrc  # or ~/.bashrc
+```
+
+### 3. Run plnr
+
+```bash
+cd your-project
 plnr
 ```
 
-## Usage
+That's it! 🎉
+
+## 💡 Usage
 
 ### Interactive Mode
 
-Navigate to any project directory and run:
+Simply run `plnr` in any project directory:
 
 ```bash
 plnr
 ```
 
-This launches an interactive UI where you can:
-1. **Chat** about your codebase
-2. **Generate plans** with `/plan [task]`
-3. **Search the web** for documentation (automatic when needed)
-4. **Export as PRD** with `/export`
-5. **Hand off to Claude Code** with `/cc`
+You'll see a beautiful interactive interface where you can chat, plan, and analyze your codebase.
 
 ### Available Commands
 
-- `/plan [task]` - Generate an implementation plan
-- `/export` - Export plan as markdown
-- `/cc` - Launch Claude Code with context
-- `/security-check` - Run security scan on codebase
-- `/clear` - Clear conversation and start fresh
-- `/help` - Show help message
-- `/exit` - Exit plnr
+| Command | Description |
+|---------|-------------|
+| `/plan [task]` | Generate detailed implementation plan |
+| `/export` | Export current plan as markdown PRD |
+| `/cc` | Launch Claude Code with gathered context |
+| `/codex` | Launch Codex CLI with gathered context |
+| `/security-check` | Run comprehensive security audit (OWASP Top 10) |
+| `/clear` | Clear conversation and start fresh |
+| `/help` | Show help message with all commands |
+| `/exit` | Exit plnr |
 
 ### File Mentions
 
-Use `@` to mention specific files:
+Reference specific files in your queries using `@`:
 
 ```bash
-❯ Explain @src/auth.ts
-❯ /plan Add JWT to @src/index.ts
+❯ Explain how @src/auth.ts works
+❯ /plan Add JWT authentication to @src/index.ts
+❯ What does @package.json tell you about this project?
 ```
 
-## Example Workflow
+Supports Tab autocomplete for file paths!
+
+## 📚 Example Workflows
+
+### Generate an Implementation Plan
 
 ```bash
-# Navigate to your project
-cd ~/my-project
-
-# Start plnr
 plnr
 
-# Ask questions about your code
-❯ how does authentication work?
+❯ /plan Add user authentication with JWT tokens
 
-# Generate a plan
-❯ /plan Add JWT authentication
+# plnr analyzes your codebase, searches for similar patterns,
+# and generates a detailed step-by-step implementation plan
+```
 
-# Search for examples (automatic)
-❯ how to implement JWT with Express?
+### Security Audit
 
-# Export the plan
+```bash
+plnr
+
+❯ /security-check
+
+# Scans your entire codebase for:
+# - Hardcoded secrets and API keys
+# - SQL injection vulnerabilities
+# - XSS vulnerabilities
+# - Authentication weaknesses
+# - And 8 more OWASP categories
+```
+
+### Chat About Your Code
+
+```bash
+plnr
+
+❯ How does authentication currently work in this app?
+❯ What patterns should I follow for adding a new API endpoint?
+❯ Show me how error handling is implemented
+```
+
+### Export and Share
+
+```bash
+plnr
+
+❯ /plan Add real-time notifications with WebSockets
 ❯ /export
 
-# Hand off to Claude Code
-❯ /cc
+# Saves a beautiful markdown PRD to your project folder
 ```
 
-## How It Works
+## 🎯 How It Works
 
-1. **Context Gathering**: Scans your project structure, reads package.json, detects framework
-2. **Relevance Filtering**: Identifies key files related to your task
-3. **AI Planning**: Sends context to OpenRouter's AI to generate structured plan
-4. **Output**: Displays plan in terminal or exports as markdown PRD
+### Chat Mode
+1. You ask a question about your codebase
+2. plnr creates a todo list for the analysis
+3. AI reads relevant files and searches for patterns
+4. Provides detailed, code-aware answers with specific references
+5. Completes all todos before responding
 
-## Supported Frameworks
+### Planning Mode
+1. You request a plan with `/plan [your task]`
+2. plnr analyzes your project structure and dependencies
+3. Searches for similar patterns in your existing code
+4. Generates a detailed implementation plan with:
+   - Summary and approach explanation
+   - Step-by-step instructions with specific file paths
+   - Code patterns to implement
+   - Dependencies to add (if needed)
+   - Risk assessment and mitigation strategies
 
-- Next.js
-- Express
-- React
-- Vue
-- Angular
-- NestJS
-- Fastify
-- Koa
+### Security Mode
+1. You run `/security-check`
+2. plnr systematically scans for 12 vulnerability categories
+3. Reads suspicious files to confirm findings
+4. Reports vulnerabilities with:
+   - File path and line number
+   - Severity level (CRITICAL to LOW)
+   - Description of the issue
+   - Specific remediation steps
 
-## Project Structure
-
-```
-plnr/
-├── src/
-│   ├── cli/           # Terminal UI and interactive input
-│   ├── context/       # Codebase analysis and file reading
-│   ├── planning/      # AI planning with tool calling
-│   ├── tools/         # Tool definitions and handlers
-│   ├── exporters/     # PRD generation
-│   ├── types/         # TypeScript definitions
-│   └── utils/         # Utilities
-├── dist/              # Compiled output
-└── docs/              # Documentation
-```
-
-## Configuration
+## 🔧 Configuration
 
 ### Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OPENROUTER_API_KEY` | ✅ Yes | - | Your OpenRouter API key |
-| `EXA_API_KEY` | ❌ No | - | Exa API key for web search |
-| `MODEL` | ❌ No | `x-ai/grok-4-fast` | Model to use (any OpenRouter model) |
-| `MODEL_CONTEXT_WINDOW` | ❌ No | `2000000` | Model context window size |
+| `EXA_API_KEY` | ❌ No | - | Exa API key for web search (recommended) |
+| `MODEL` | ❌ No | `x-ai/grok-4-fast` | AI model to use |
+| `MODEL_CONTEXT_WINDOW` | ❌ No | `2000000` | Model's context window size |
 
-### Changing Models
+### Choosing the Right Model
 
-You can use any model from OpenRouter. Here are some recommended models:
+plnr works with any model on OpenRouter. Here are our recommendations:
 
+**For Speed:**
 ```bash
-# Fast models (recommended for speed)
-export MODEL="x-ai/grok-4-fast"
-export MODEL="x-ai/grok-code-fast-1"
-
-# High-quality models (recommended for accuracy)
-export MODEL="anthropic/claude-sonnet-4.5"
-export MODEL="openai/gpt-5"
+export MODEL="x-ai/grok-4-fast"           # ⚡ Blazing fast, 2M context
+export MODEL="anthropic/claude-haiku-4.5"      # ⚡ Optimized for code
 ```
 
-See [OpenRouter Models](https://openrouter.ai/models) for the full list.
+**For Quality:**
+```bash
+export MODEL="anthropic/claude-sonnet-4.5"  # 🎯 Most accurate
+export MODEL="openai/gpt-5"                 # 🎯 Great at planning
+export MODEL="google/gemini-2.5-pro"        # 🎯 Excellent reasoning
+```
 
-## Troubleshooting
+**For Cost:**
+```bash
+export MODEL="x-ai/grok-4-fast"        # 💰 Budget-friendly
+export MODEL="x-ai/grok-code-fast-1"      # 💰 Good value
+```
 
-### Command not found: plnr
+See [all available models →](https://openrouter.ai/models)
 
-If `plnr` is not found after installation:
+### Context Window Optimization
+
+plnr automatically optimizes for your model's context window:
+
+- **2M+ tokens** (Grok-4): Minimal pruning, keeps 80 messages
+- **500K-1.5M tokens** Moderate pruning, keeps 50 messages
+- **200K-500K tokens** (GPT-5): Standard pruning, keeps 30 messages
+- **<200K tokens**: Aggressive pruning for efficiency
+
+No configuration needed - it just works! 🎯
+
+## 🌟 Advanced Features
+
+### Todo Management
+
+plnr uses an intelligent todo system that:
+- ✅ Creates high-level tasks at the start
+- 📍 Tracks progress in real-time
+- ✨ Updates the UI as todos complete
+- 🎯 **Ensures all todos are completed before providing final response**
+
+You'll see todo lists like:
+```
+✓ Analyze authentication patterns in codebase
+✓ Search for JWT implementation examples
+→ Design token refresh strategy
+○ Plan database schema changes
+```
+
+### Intelligent Prompts
+
+Built using best practices from:
+- 🔵 OpenAI Codex CLI
+- 🟣 Anthropic Claude Code
+- 🟢 SST OpenCode
+
+Optimized for:
+- Strategic tool usage (quality over quantity)
+- Clear stopping criteria
+- Result-focused responses
+- Maintaining tool call/result pairing for Claude models
+
+### MCP Integration
+
+Uses Model Context Protocol (MCP) for:
+- **Context7**: Latest library documentation
+- **Exa Search**: Real-time web search
+
+### Error Recovery
+
+Handles edge cases gracefully:
+- XML format detection (Grok models)
+- Tool call/result pairing (Claude models)
+- Context window overflow
+- API rate limiting
+- Network errors
+
+## 🛠️ Supported Frameworks
+
+plnr automatically detects and optimizes for:
+
+- Next.js
+- React
+- Vue
+- Angular
+- Express
+- NestJS
+- Fastify
+- Koa
+- Svelte
+- SolidJS
+- Astro
+- Remix
+
+And many more!
+
+## 📁 Project Structure
+
+```
+plnr/
+├── src/
+│   ├── cli/              # Terminal UI and interactive input
+│   ├── context/          # Codebase analysis and gathering
+│   ├── planning/         # AI planning with OpenRouter
+│   ├── chat/             # Chat mode implementation
+│   ├── security/         # Security audit features
+│   ├── tools/            # Tool definitions and handlers
+│   ├── exporters/        # PRD and markdown export
+│   ├── types/            # TypeScript type definitions
+│   └── utils/            # Utilities and helpers
+├── dist/                 # Compiled JavaScript output
+└── docs/                 # Implementation documentation
+```
+
+## 🐛 Troubleshooting
+
+### "Command not found: plnr"
 
 ```bash
-# Check if installed globally
+# Check if installed
 npm list -g plnr
 
 # Reinstall if needed
 npm install -g plnr
+
+# Check npm global bin path is in PATH
+npm config get prefix
 ```
 
-### Missing API Key Error
-
-If you see "OPENROUTER_API_KEY is required":
+### "OPENROUTER_API_KEY is required"
 
 ```bash
-# Verify environment variable is set
+# Verify it's set
 echo $OPENROUTER_API_KEY
 
-# If empty, set it:
-export OPENROUTER_API_KEY="sk-or-v1-xxxxx"
-
-# Add to shell profile for persistence
+# If empty, add to your shell profile
 echo 'export OPENROUTER_API_KEY="sk-or-v1-xxxxx"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-### Permission Errors on Linux/macOS
-
-If you get EACCES errors during install:
+### Permission Errors
 
 ```bash
-# Use sudo (not recommended)
-sudo npm install -g plnr
+# Fix npm permissions (recommended)
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc
+source ~/.zshrc
 
-# OR fix npm permissions (recommended)
-# See: https://docs.npmjs.com/resolving-eacces-permissions-errors
+# Then reinstall
+npm install -g plnr
 ```
 
-## Development
-
-For contributors who want to develop plnr locally:
+### Model Not Working
 
 ```bash
-# Clone the repository
+# Verify model is available on OpenRouter
+# See: https://openrouter.ai/models
+
+# Check your MODEL variable
+echo $MODEL
+
+# Try a different model
+export MODEL="anthropic/claude-sonnet-4.5"
+```
+
+## 🚧 Development
+
+Want to contribute? Here's how to set up for development:
+
+```bash
+# Clone repository
 git clone https://github.com/CyberBoyAyush/plnr.git
 cd plnr
 
@@ -286,7 +436,7 @@ pnpm install
 # Run in development mode
 pnpm dev
 
-# Build
+# Build for production
 pnpm build
 
 # Test locally
@@ -294,30 +444,57 @@ pnpm link --global
 plnr
 ```
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests at [GitHub](https://github.com/CyberBoyAyush/plnr).
+We welcome contributions! Here's how you can help:
 
-## License
+1. 🐛 **Report bugs**: [Open an issue](https://github.com/CyberBoyAyush/plnr/issues)
+2. 💡 **Suggest features**: [Start a discussion](https://github.com/CyberBoyAyush/plnr/issues)
+3. 📝 **Improve docs**: Submit PRs for documentation
+4. 🔧 **Fix issues**: Check out [good first issues](https://github.com/CyberBoyAyush/plnr/labels/good%20first%20issue)
 
-MIT - See [LICENSE](LICENSE) for details.
+Please read our [Contributing Guide](CONTRIBUTING.md) before submitting PRs.
 
-## Links
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 🔗 Links
 
 - 📦 [npm Package](https://www.npmjs.com/package/plnr)
 - 💻 [GitHub Repository](https://github.com/CyberBoyAyush/plnr)
 - 🐛 [Report Issues](https://github.com/CyberBoyAyush/plnr/issues)
-- 📚 [OpenRouter Documentation](https://openrouter.ai/docs)
+- 📚 [OpenRouter Docs](https://openrouter.ai/docs)
 - 🔍 [Exa Search](https://exa.ai/)
+- 📖 [Context7 MCP](https://context7.com/)
 
-## Author
+## 👨‍💻 Author
 
 **Ayush Sharma**
 - Email: hi@aysh.me
 - GitHub: [@CyberBoyAyush](https://github.com/CyberBoyAyush)
+- Website: [aysh.me](https://aysh.me)
+
+## 🙏 Acknowledgments
+
+Built with insights from:
+- [OpenAI Codex CLI](https://github.com/openai/codex) - Prompt engineering best practices
+- [Anthropic Claude Code](https://claude.ai/code) - Strategic context gathering
+- [SST OpenCode](https://opencode.ai/) - Agent architecture patterns
+
+Special thanks to:
+- OpenRouter for providing unified LLM access
+- Exa for semantic search capabilities
+- Context7 for library documentation
 
 ---
 
-**plnr** - Plan before implementation 🚀
+<div align="center">
 
-Built with TypeScript, OpenRouter, and Exa
+**plnr** - Think before you code 🚀
+
+*Built with TypeScript, OpenRouter, and love*
+
+[⭐ Star us on GitHub](https://github.com/CyberBoyAyush/plnr) | [📦 Try it now](https://www.npmjs.com/package/plnr)
+
+</div>

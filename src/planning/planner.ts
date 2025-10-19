@@ -41,6 +41,7 @@ export async function generatePlan(
     let iteration = 0;
     let finalResponse: string | null = null;
     let totalTokensUsed = 0;
+    let lastFinishReason = '';
 
     while (iteration < maxIterations) {
       iteration++;
@@ -48,8 +49,11 @@ export async function generatePlan(
 
       // Use more tokens for chat mode to allow detailed responses
       const maxTokens = isPlanning ? 8000 : 16000;
-      // Enable streaming for chat mode (non-planning) on final response
-      const enableStreaming = !isPlanning && iteration > 1;
+
+      // CRITICAL: Only enable streaming when we're certain it's the final text response
+      // Never stream when model might make tool calls (causes XML output bug with Grok)
+      const enableStreaming = !isPlanning && lastFinishReason === 'stop' && iteration > 2;
+
       const completion = await callOpenRouterWithTools(messages, tools, config.model, maxTokens, enableStreaming);
       const message = completion.choices[0]?.message;
 
@@ -64,8 +68,30 @@ export async function generatePlan(
         throw new Error('No message in completion');
       }
 
+      // Track finish reason for streaming decision
+      lastFinishReason = completion.choices[0]?.finish_reason || '';
+
       // Add assistant's message to conversation
       messages.push(message);
+
+      // CRITICAL FIX: Check if model output XML instead of proper tool calls (Grok bug)
+      if (message.content && typeof message.content === 'string') {
+        const hasXMLToolCall = message.content.includes('<xai:function_call') ||
+                               message.content.includes('</xai:function_call>');
+
+        if (hasXMLToolCall) {
+          logger.warn('Model outputted XML format instead of tool calls. Requesting correction.');
+
+          // Inject a correction message
+          messages.push({
+            role: 'user',
+            content: `ERROR: You outputted XML format for tool calls. You must use the proper tool calling format provided by the API, not XML. Please redo your last response using the correct tool format.`
+          });
+
+          // Continue loop to get corrected response
+          continue;
+        }
+      }
 
       // Check if we have tool calls
       if (message.tool_calls && message.tool_calls.length > 0) {
@@ -123,25 +149,62 @@ export async function generatePlan(
           }
         }
 
+        // Soft warning when approaching limit
+        const warningThreshold = Math.floor(maxIterations * 0.7); // Warn at 70% of max
+        if (iteration >= warningThreshold && iteration % 5 === 0) {
+          logger.warn(`Tool call iteration ${iteration}/${maxIterations}: Approaching limit`);
+
+          // Check if todos are incomplete
+          const todos = todoManager.getTodos(sessionId);
+          const incompleteTodos = todos.filter(t => t.status !== 'completed');
+
+          if (incompleteTodos.length > 0 && iteration >= warningThreshold + 5) {
+            // Add warning message
+            messages.push({
+              role: 'user',
+              content: `⚠️ You have made ${iteration} tool calls (max: ${maxIterations}). Please complete remaining todos and provide your final response soon.`
+            });
+          }
+        }
+
+        // Absolute hard stop at maxIterations - 5 (to allow for final response)
+        if (iteration >= maxIterations - 5) {
+          logger.warn(`Approaching hard limit at iteration ${iteration}/${maxIterations}. Requesting final response.`);
+          messages.push({
+            role: 'user',
+            content: `STOP: You are approaching the maximum of ${maxIterations} tool calls. You must now provide your final response based on the information gathered. Complete any remaining todos and respond immediately.`
+          });
+        }
+
         // Smart pruning: Adjust based on model context window
         // Calculate dynamic retention based on context window size
         const contextWindow = config.modelContextWindow;
         let recentToKeep = 10;
         let pruneThreshold = 20;
 
-        if (contextWindow >= 2000000) {
-          // Large context (2M+): Keep more, prune later
+        if (contextWindow >= 1500000) {
+          // Huge context (1.5M+): Very generous, minimal pruning
+          recentToKeep = 40;
+          pruneThreshold = 80;
+        } else if (contextWindow >= 500000) {
+          // Large context (500K-1.5M): Moderate pruning
           recentToKeep = 25;
           pruneThreshold = 50;
-        } else if (contextWindow >= 500000) {
-          // Medium context (500K-2M): Standard pruning
-          recentToKeep = 20;
-          pruneThreshold = 40;
+        } else if (contextWindow >= 200000) {
+          // Medium context (200K-500K): Standard pruning
+          recentToKeep = 15;
+          pruneThreshold = 30;
+        } else if (contextWindow >= 100000) {
+          // Small context (100K-200K): More aggressive
+          recentToKeep = 10;
+          pruneThreshold = 20;
         } else {
-          // Small context (<500K): Aggressive pruning
-          recentToKeep = 12;
-          pruneThreshold = 25;
+          // Very small context (<100K): Very aggressive pruning
+          recentToKeep = 8;
+          pruneThreshold = 15;
         }
+
+        logger.debug(`Context window: ${contextWindow}, pruneThreshold: ${pruneThreshold}, recentToKeep: ${recentToKeep}`);
 
         if (messages.length > pruneThreshold) {
           const systemMsg = messages[0]; // Keep system prompt
