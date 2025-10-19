@@ -101,7 +101,8 @@ export async function callOpenRouterWithTools(
   tools: ChatCompletionTool[],
   model: string = config.model,
   maxTokens: number = 4000,
-  streaming: boolean = false
+  streaming: boolean = false,
+  abortSignal?: AbortSignal
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   try {
     logger.debug(`Calling OpenRouter with tools. Model: ${model}, Streaming: ${streaming}`);
@@ -115,7 +116,7 @@ export async function callOpenRouterWithTools(
         tool_choice: 'auto',
         temperature: 0.7,
         max_tokens: maxTokens
-      });
+      }, abortSignal ? { signal: abortSignal as any } : undefined);
 
       logger.debug(`Tool call response received. Finish reason: ${completion.choices[0]?.finish_reason}`);
       return completion;
@@ -135,7 +136,7 @@ export async function callOpenRouterWithTools(
       temperature: 0.7,
       max_tokens: maxTokens,
       stream: true
-    });
+    }, abortSignal ? { signal: abortSignal as any } : undefined);
 
     let fullContent = '';
     let fullToolCalls: any[] = [];
