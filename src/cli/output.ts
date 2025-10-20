@@ -332,24 +332,23 @@ export function displayWelcome(version: string, model: string): void {
   console.log('\n');
 }
 
-export function displayTodos(todos: { id: string; title: string; status: 'pending' | 'in_progress' | 'completed' }[]): void {
+// Helper function for todo status presentation
+function getTodoStatusPresentation(status: Todo['status']): { icon: string; style: typeof chalk } {
+  const statusConfig = {
+    completed: { icon: chalk.green('✓'), style: chalk.dim.strikethrough },
+    in_progress: { icon: chalk.yellow('→'), style: chalk.white },
+    pending: { icon: chalk.dim('○'), style: chalk.dim }
+  };
+  return statusConfig[status];
+}
+
+export function displayTodos(todos: Todo[]): void {
   if (todos.length === 0) return;
 
   console.log('\n' + chalk.dim('📋 ') + chalk.bold('Tasks'));
-  
+
   todos.forEach(todo => {
-    const statusIcon = todo.status === 'completed' 
-      ? chalk.green('✓') 
-      : todo.status === 'in_progress' 
-      ? chalk.yellow('→')
-      : chalk.dim('○');
-    
-    const titleStyle = todo.status === 'completed' 
-      ? chalk.dim.strikethrough 
-      : todo.status === 'in_progress'
-      ? chalk.white
-      : chalk.dim;
-    
-    console.log(`  ${statusIcon} ${titleStyle(todo.title)}`);
+    const { icon, style } = getTodoStatusPresentation(todo.status);
+    console.log(`  ${icon} ${style(todo.title)}`);
   });
 }

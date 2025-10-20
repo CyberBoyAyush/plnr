@@ -38,8 +38,8 @@ export function setupEscHandler(): { controller: AbortController; cleanup: () =>
         }, 2000);
       } else if (escPressCount >= 2) {
         // Second ESC press - cancel (don't show message here, let the catch block handle it)
+        // Note: Don't call cleanup() here, let the caller control cleanup timing in finally block
         controller.abort();
-        cleanup();
       }
     }
   };

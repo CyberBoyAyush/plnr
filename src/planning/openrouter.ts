@@ -14,6 +14,10 @@ const openai = new OpenAI({
   }
 });
 
+// Helper to construct abort signal options
+const getSignalOptions = (signal?: AbortSignal) =>
+  signal ? { signal: signal as any } : undefined;
+
 export async function callOpenRouter(
   prompt: string,
   isPlanning: boolean = true,
@@ -116,7 +120,7 @@ export async function callOpenRouterWithTools(
         tool_choice: 'auto',
         temperature: 0.7,
         max_tokens: maxTokens
-      }, abortSignal ? { signal: abortSignal as any } : undefined);
+      }, getSignalOptions(abortSignal));
 
       logger.debug(`Tool call response received. Finish reason: ${completion.choices[0]?.finish_reason}`);
       return completion;
@@ -136,7 +140,7 @@ export async function callOpenRouterWithTools(
       temperature: 0.7,
       max_tokens: maxTokens,
       stream: true
-    }, abortSignal ? { signal: abortSignal as any } : undefined);
+    }, getSignalOptions(abortSignal));
 
     let fullContent = '';
     let fullToolCalls: any[] = [];

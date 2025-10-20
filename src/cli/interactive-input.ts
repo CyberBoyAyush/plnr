@@ -371,6 +371,11 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     const handleKeypress = (str: string, key: readline.Key) => {
       if (!key) return;
 
+      // Ignore all keypresses during enhancement except Ctrl+C
+      if (isEnhancing && !(key.ctrl && key.name === 'c')) {
+        return;
+      }
+
       // Debug: log key info (remove this later)
       // console.log('\nKey:', JSON.stringify({ name: key.name, ctrl: key.ctrl, meta: key.meta, shift: key.shift, sequence: key.sequence }));
 
@@ -406,10 +411,13 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         showMenu = false;
         render();
 
-        // Temporarily disable keypress handling during enhancement
-        process.stdin.removeListener('keypress', handleKeypress);
+        // Enhancement timeout (30 seconds)
+        const ENHANCEMENT_TIMEOUT_MS = 30000;
+        const timeoutPromise = new Promise<string>((_, reject) => {
+          setTimeout(() => reject(new Error('Enhancement timed out')), ENHANCEMENT_TIMEOUT_MS);
+        });
 
-        enhancePrompt(originalInput)
+        Promise.race([enhancePrompt(originalInput), timeoutPromise])
           .then((enhanced) => {
             // Update input buffer with enhanced text
             inputBuffer = enhanced;
@@ -417,23 +425,18 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
             cursorPosition = enhanced.length;
             isEnhancing = false;
             updateSuggestionsState();
-
-            // Re-enable keypress handling
-            process.stdin.on('keypress', handleKeypress);
-
             // Render the enhanced prompt
             render();
           })
           .catch((error) => {
+            // Show error message
+            process.stdout.write('\n' + chalk.red('  ✗ Enhancement failed: ') + chalk.gray(error.message || 'Unknown error') + '\n');
+
             // On error, restore original input
             inputBuffer = originalInput;
             cursorPosition = originalInput.length;
             isEnhancing = false;
             updateSuggestionsState();
-
-            // Re-enable keypress handling
-            process.stdin.on('keypress', handleKeypress);
-
             // Render with original text
             render();
           });

@@ -30,50 +30,53 @@ export async function enhancePrompt(userInput: string): Promise<string> {
 
     logger.debug('Enhancing prompt...');
 
-    const systemPrompt = `You are a prompt enhancement assistant. Transform user prompts to be more specific, actionable, and effective for codebase planning and analysis.
+    const systemPrompt = `You are a prompt enhancement assistant. Transform user prompts to be more specific, actionable, and effective.
 
-Guidelines:
-- Make prompts clear and specific
-- For vague requests, add context about analyzing existing patterns
-- For implementation requests, suggest step-by-step planning
-- For questions, make them more detailed and technical
-- Keep the user's intent and tone
-- Be concise but comprehensive
-- Return ONLY the enhanced prompt, no explanations
+CRITICAL RULES:
+- Return ONLY the enhanced prompt text, NOTHING ELSE
+- No explanations, no commentary, no additional text
+- Do not add quotes around the prompt
+- Just the enhanced prompt as plain text
 
 Examples:
-Input: "add github auth"
-Output: "How can I implement GitHub OAuth authentication in this codebase? Please analyze existing auth patterns, identify files that need changes, and provide a step-by-step implementation plan."
+Input: add github auth
+Output: How can I implement GitHub OAuth authentication in this codebase? Please analyze existing auth patterns, identify files that need changes, and provide a step-by-step implementation plan.
 
-Input: "how does auth work"
-Output: "How does authentication currently work in this codebase? Please analyze auth-related files, explain the authentication flow, and identify the key components involved."
-
-Input: "fix the bug in api"
-Output: "Help me identify and fix bugs in the API endpoints. Please analyze the API code, check for common issues like error handling, validation, and security problems."`;
+Input: how does auth work
+Output: How does authentication currently work in this codebase? Please analyze auth-related files, explain the authentication flow, and identify the key components involved.`;
 
     // Simple API call without tools
     const completion = await openai.chat.completions.create({
       model: config.model,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Enhance this prompt:\n\n"${userInput}"` }
+        { role: 'user', content: userInput }
       ],
-      temperature: 0.7,
-      max_tokens: 500
+      temperature: 0.5,
+      max_tokens: 300
     });
 
-    const enhanced = completion.choices[0]?.message?.content?.trim();
+    let enhanced = completion.choices[0]?.message?.content?.trim();
 
     if (!enhanced) {
       logger.warn('No enhancement received, using original');
       return userInput;
     }
 
-    // Remove quotes if AI wrapped the response
-    let cleaned = enhanced;
+    // Extract only the first line if there are multiple lines (filter out commentary)
+    const firstLine = enhanced.split('\n')[0].trim();
+
+    // Remove quotes if present
+    let cleaned = firstLine;
     if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
         (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-      cleaned = cleaned.slice(1, -1);
+      cleaned = cleaned.slice(1, -1).trim();
+    }
+
+    // If cleaned result is empty or too short, fall back to original input
+    if (!cleaned || cleaned.length < 5) {
+      logger.warn('Enhanced prompt was empty or too short, using original');
+      return userInput;
     }
 
     logger.debug('Prompt enhanced successfully');

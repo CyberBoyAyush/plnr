@@ -255,12 +255,20 @@ export async function handleCreateTodos(
   todos: Todo[]
 ): Promise<ToolCallResult> {
   try {
+    // Validate input
+    if (!todos || !Array.isArray(todos) || todos.length === 0) {
+      logger.debug('Invalid or empty todos array');
+      return { success: false, error: 'Invalid or empty todos array' };
+    }
+
     todoManager.createTodos(sessionId, todos);
+    logger.debug(`Created ${todos.length} todos for session ${sessionId}`);
     return {
       success: true,
       result: `Created ${todos.length} tasks`
     };
   } catch (error: any) {
+    logger.debug('Error creating todos:', error);
     return { success: false, error: 'Failed to create todos' };
   }
 }
@@ -271,15 +279,27 @@ export async function handleUpdateTodo(
   status: Todo['status']
 ): Promise<ToolCallResult> {
   try {
+    // Validate input
+    if (!todoId || typeof todoId !== 'string') {
+      logger.debug('Invalid todo ID');
+      return { success: false, error: 'Invalid todo ID' };
+    }
+    if (!status || !['pending', 'in_progress', 'completed'].includes(status)) {
+      logger.debug('Invalid status');
+      return { success: false, error: 'Invalid status' };
+    }
+
     const updated = todoManager.updateTodo(sessionId, todoId, status);
     if (!updated) {
       return { success: false, error: 'Todo not found' };
     }
+    logger.debug(`Updated todo ${todoId} to ${status} for session ${sessionId}`);
     return {
       success: true,
       result: `Updated task to ${status}`
     };
   } catch (error: any) {
+    logger.debug('Error updating todo:', error);
     return { success: false, error: 'Failed to update todo' };
   }
 }
@@ -315,9 +335,15 @@ export async function executeToolCall(
       return handleGetCodeContext(args.query);
 
     case 'create_todos':
+      if (!args || !args.todos) {
+        return { success: false, error: 'Missing required parameter: todos' };
+      }
       return handleCreateTodos(sessionId || 'default', args.todos);
 
     case 'update_todo':
+      if (!args || !args.todo_id || !args.status) {
+        return { success: false, error: 'Missing required parameters: todo_id or status' };
+      }
       return handleUpdateTodo(sessionId || 'default', args.todo_id, args.status);
 
     default:

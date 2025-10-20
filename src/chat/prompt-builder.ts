@@ -13,6 +13,13 @@ If you have created todos, you MUST:
 2. Mark each as "completed" when done
 3. Only AFTER all todos show "completed", provide your response
 
+**EXCEPTION - Handling Blocked Todos:**
+If you encounter an insurmountable blocker (missing permissions, unavailable tool, unclear requirements, timeout):
+- Mark that todo as "blocked" with a clear explanation in a note
+- Document what prevented completion
+- Provide your best-effort response with the information gathered
+- Explain limitations and blockers to the user
+
 DO NOT start writing your response while todos are still "in_progress" or "pending".
 
 ## Core Workflow
