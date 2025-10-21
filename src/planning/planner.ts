@@ -16,7 +16,8 @@ export async function generatePlan(
   task: string,
   conversationHistory: Array<{task: string, plan: Plan}> = [],
   isPlanning: boolean = true,
-  sessionId: string = 'default'
+  sessionId: string = 'default',
+  abortSignal?: AbortSignal
 ): Promise<Plan> {
   try {
     logger.debug('Building prompt for AI...');
@@ -54,7 +55,7 @@ export async function generatePlan(
       // Never stream when model might make tool calls (causes XML output bug with Grok)
       const enableStreaming = !isPlanning && lastFinishReason === 'stop' && iteration > 2;
 
-      const completion = await callOpenRouterWithTools(messages, tools, config.model, maxTokens, enableStreaming);
+      const completion = await callOpenRouterWithTools(messages, tools, config.model, maxTokens, enableStreaming, abortSignal);
       const message = completion.choices[0]?.message;
 
       // Track token usage
@@ -357,7 +358,11 @@ export async function generatePlan(
 
     logger.success('Plan generated successfully');
     return plan;
-  } catch (error) {
+  } catch (error: any) {
+    // Handle abort error gracefully
+    if (error.name === 'AbortError' || error.message?.includes('aborted') || error.message?.includes('user aborted')) {
+      throw new Error('Request cancelled by user');
+    }
     logger.error('Error generating plan:', error);
     throw error;
   }

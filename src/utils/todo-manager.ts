@@ -8,7 +8,8 @@ class TodoManager {
   private todos: Map<string, Todo[]> = new Map();
 
   createTodos(sessionId: string, todos: Todo[]): void {
-    this.todos.set(sessionId, todos);
+    // Store a defensive copy to prevent external mutation
+    this.todos.set(sessionId, [...todos]);
   }
 
   updateTodo(sessionId: string, todoId: string, status: Todo['status']): boolean {
@@ -23,7 +24,9 @@ class TodoManager {
   }
 
   getTodos(sessionId: string): Todo[] {
-    return this.todos.get(sessionId) || [];
+    // Return a defensive copy to prevent external mutation
+    const sessionTodos = this.todos.get(sessionId);
+    return sessionTodos ? [...sessionTodos] : [];
   }
 
   clearTodos(sessionId: string): void {

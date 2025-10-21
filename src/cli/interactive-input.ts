@@ -1,6 +1,7 @@
 import * as readline from 'readline';
 import chalk from 'chalk';
 import Fuse from 'fuse.js';
+import { enhancePrompt } from '../utils/prompt-enhancer.js';
 
 interface Command {
   name: string;
@@ -42,6 +43,7 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     let selectedIndex = 0;
     let showMenu = false;
     let currentMode: InputMode = initialMode || 'chat'; // Default to chat mode, or use passed mode
+    let isEnhancing = false; // Track if we're currently enhancing
 
     // Border box configuration
     const PADDING_LEFT = 1;
@@ -280,9 +282,14 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
       // Display mode indicator below the box
       readline.moveCursor(process.stdout, 0, 1);
       readline.cursorTo(process.stdout, 0);
-      const modeText = currentMode === 'plan' 
-        ? chalk.cyan('  Mode: ') + chalk.bold.cyan('Plan') + chalk.gray(' (Shift+Tab to switch)')
-        : chalk.magenta('  Mode: ') + chalk.bold.magenta('Chat') + chalk.gray(' (Shift+Tab to switch)');
+      let modeText;
+      if (isEnhancing) {
+        modeText = chalk.yellow('  ⚡ Enhancing prompt...');
+      } else {
+        modeText = currentMode === 'plan'
+          ? chalk.cyan('  Mode: ') + chalk.bold.cyan('Plan') + chalk.gray(' (Shift+Tab to switch, Ctrl+P to enhance)')
+          : chalk.magenta('  Mode: ') + chalk.bold.magenta('Chat') + chalk.gray(' (Shift+Tab to switch, Ctrl+P to enhance)');
+      }
       process.stdout.write(modeText);
       
       // Now cursor is at the END of mode line (last line rendered)
@@ -364,6 +371,11 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
     const handleKeypress = (str: string, key: readline.Key) => {
       if (!key) return;
 
+      // Ignore all keypresses during enhancement except Ctrl+C
+      if (isEnhancing && !(key.ctrl && key.name === 'c')) {
+        return;
+      }
+
       // Debug: log key info (remove this later)
       // console.log('\nKey:', JSON.stringify({ name: key.name, ctrl: key.ctrl, meta: key.meta, shift: key.shift, sequence: key.sequence }));
 
@@ -372,6 +384,64 @@ export async function getInteractiveInput(options: InteractiveInputOptions): Pro
         cleanup();
         process.stdout.write('\n');
         process.exit(0);
+      }
+
+      // Handle Ctrl+P - Enhance prompt
+      if (key.ctrl && key.name === 'p') {
+        // Only enhance if there's input
+        if (inputBuffer.trim().length === 0) {
+          return;
+        }
+
+        // Don't enhance commands
+        if (inputBuffer.trim().startsWith('/')) {
+          return;
+        }
+
+        // Don't enhance if already enhancing
+        if (isEnhancing) {
+          return;
+        }
+
+        // Save original input
+        const originalInput = inputBuffer;
+
+        // Set enhancing flag and show status in mode line
+        isEnhancing = true;
+        showMenu = false;
+        render();
+
+        // Enhancement timeout (30 seconds)
+        const ENHANCEMENT_TIMEOUT_MS = 30000;
+        const timeoutPromise = new Promise<string>((_, reject) => {
+          setTimeout(() => reject(new Error('Enhancement timed out')), ENHANCEMENT_TIMEOUT_MS);
+        });
+
+        Promise.race([enhancePrompt(originalInput), timeoutPromise])
+          .then((enhanced) => {
+            // Update input buffer with enhanced text
+            inputBuffer = enhanced;
+            // Place cursor at the end so user can immediately edit/add more
+            cursorPosition = enhanced.length;
+            isEnhancing = false;
+            updateSuggestionsState();
+            // Render the enhanced prompt
+            render();
+          })
+          .catch((error) => {
+            // Show error message
+            process.stdout.write('\n' + chalk.red('  ✗ Enhancement failed: ') + chalk.gray(error.message || 'Unknown error') + '\n');
+
+            // On error, restore original input
+            inputBuffer = originalInput;
+            cursorPosition = originalInput.length;
+            isEnhancing = false;
+            updateSuggestionsState();
+            // Render with original text
+            render();
+          });
+
+        return;
       }
 
       if (key.ctrl && (key.name === 'j' || key.sequence === '\n')) {

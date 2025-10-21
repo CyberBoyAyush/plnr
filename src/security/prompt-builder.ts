@@ -187,7 +187,7 @@ Search patterns:
 
 ### 12. SECURITY MISCONFIGURATIONS [LOW-MEDIUM]
 - Exposed .git directory in production
-- Secrets in .env tracked in git (check .gitignore)
+- .env files committed to version control (verify .gitignore entries)
 - Default credentials
 - Unnecessary HTTP methods enabled
 
@@ -229,7 +229,8 @@ The codebase follows security best practices. Recommendations:
 \`\`\`
 
 ## IMPORTANT NOTES
-- Skip .env files (assume secure if properly configured)
+- Verify .env files are listed in .gitignore and NOT committed to repository (do NOT read .env contents if properly excluded)
+- Flag any .env files present in the repo root while skipping content inspection if properly configured
 - Skip test files unless they contain real credentials
 - Confirm each issue by reading actual code
 - Provide actionable, specific remediation steps

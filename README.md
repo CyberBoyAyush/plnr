@@ -45,6 +45,7 @@ Building software is complex. Before writing a single line of code, you need to:
 ### 🎨 Professional Terminal Experience
 - **Beautiful CLI**: Modern, colorful terminal UI with progress indicators
 - **Real-time Feedback**: See exactly what the AI is analyzing as it works
+- **Prompt Enhancement**: Press Ctrl+P to enhance your prompt for better results
 - **File Mentions**: Reference specific files with `@` syntax for targeted analysis
 - **Export to Markdown**: Save plans as structured PRD documents
 
@@ -159,6 +160,23 @@ Reference specific files in your queries using `@`:
 ```
 
 Supports Tab autocomplete for file paths!
+
+### Prompt Enhancement
+
+Get better results by enhancing your prompts with **Ctrl+P**:
+
+```bash
+❯ add github auth
+  [Press Ctrl+P]
+  ⚡ Enhancing prompt...
+  ✓ Prompt enhanced
+
+❯ How can I implement GitHub OAuth authentication in this codebase?
+  Please analyze existing auth patterns, identify files that need
+  changes, and provide a step-by-step implementation plan.
+```
+
+The AI transforms vague prompts into specific, actionable requests that get better results!
 
 ## 📚 Example Workflows
 

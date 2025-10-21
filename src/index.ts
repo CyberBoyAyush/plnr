@@ -20,6 +20,7 @@ import Fuse from 'fuse.js';
 import { getInteractiveInput } from './cli/interactive-input.js';
 import { logger } from './utils/logger.js';
 import { getSecurityAuditPrompt } from './security/prompt-builder.js';
+import { setupEscHandler } from './utils/esc-handler.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { createRequire } from 'module';
@@ -530,8 +531,13 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
             console.log('');
           } catch (error: any) {
             console.log('\n');
-            displayError(error.message || 'Security scan failed');
-            console.log('');
+            // Handle cancellation gracefully
+            if (error.message === 'Request cancelled by user') {
+              console.log(chalk.yellow('✕ Request cancelled by user\n'));
+            } else {
+              displayError(error.message || 'Security scan failed');
+              console.log('');
+            }
           }
           continue;
         }
@@ -571,8 +577,10 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
           console.log('');
           displayInfo('Keyboard shortcuts:');
           console.log('  Ctrl+C         - Exit plnr');
+          console.log('  Ctrl+P         - Enhance prompt (make it more specific and actionable)');
           console.log('  Tab            - Autocomplete commands and files');
-          console.log('  ESC            - Cancel current AI request');
+          console.log('  Shift+Tab      - Switch between Chat and Plan modes');
+          console.log('  ESC (2x)       - Cancel ongoing AI request (press twice)');
           console.log('');
           displayInfo('Usage:');
           console.log('  Just chat:  "How do I add authentication?"');
@@ -640,23 +648,29 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
             console.log('');
           } catch (error: any) {
             console.log('\n');
-            displayError(error.message || 'An error occurred');
-            console.log('');
+            // Handle cancellation gracefully
+            if (error.message === 'Request cancelled by user') {
+              console.log(chalk.yellow('✕ Request cancelled by user\n'));
+            } else {
+              displayError(error.message || 'An error occurred');
+              console.log('');
+            }
           }
           continue;
         }
 
         // Default: Use current mode (Plan or Chat)
+        const escHandler = setupEscHandler();
         try {
           console.log('');
 
           // Step 1: Smart context gathering - only when needed
           // Chat mode: Only gather if query mentions code/files or @ mentions
           // Plan mode: Always gather context
-          const needsCodebaseContext = mode === 'plan' || 
+          const needsCodebaseContext = mode === 'plan' ||
             mentionedFiles.length > 0 ||
             /\b(file|code|implement|refactor|fix|bug|error|function|class|component|add|create|update|change)\b/i.test(input);
-          
+
           if (!context && needsCodebaseContext) {
             context = await gatherContext(projectRoot, input, mentionedFiles);
           }
@@ -669,7 +683,7 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
             }
             console.log(chalk.dim('⚡ Generating implementation plan...'));
             currentTask = input;
-            currentPlan = await generatePlan(context, input, conversationHistory, true);
+            currentPlan = await generatePlan(context, input, conversationHistory, true, 'default', escHandler.controller.signal);
 
             // Add to history
             conversationHistory.push({ task: input, plan: currentPlan });
@@ -698,8 +712,8 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
               relevantFiles: [],
               fileTree: ''
             };
-            
-            const response = await generatePlan(chatContext, input, conversationHistory, false);
+
+            const response = await generatePlan(chatContext, input, conversationHistory, false, 'default', escHandler.controller.signal);
 
             // Add to history
             conversationHistory.push({ task: input, plan: response });
@@ -723,8 +737,15 @@ ${currentPlan ? `## Implementation Plan\n\n${currentPlan.summary}\n\n### Steps\n
           }
         } catch (error: any) {
           console.log('\n');
-          displayError(error.message || 'An error occurred');
-          console.log('');
+          // Handle cancellation gracefully
+          if (error.message === 'Request cancelled by user') {
+            console.log(chalk.yellow('✕ Request cancelled by user\n'));
+          } else {
+            displayError(error.message || 'An error occurred');
+            console.log('');
+          }
+        } finally {
+          escHandler.cleanup();
         }
       } catch (error: any) {
         console.log('\n');
