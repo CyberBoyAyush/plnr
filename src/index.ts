@@ -7,6 +7,10 @@ process.on('warning', (warning) => {
   console.warn(warning);
 });
 
+// Increase max listeners for AbortSignal to handle many tool calls
+import { EventEmitter } from 'events';
+EventEmitter.defaultMaxListeners = 100;
+
 import { Command } from 'commander';
 import { validateConfig, config } from './config.js';
 import { gatherContext } from './context/gatherer.js';

@@ -49,26 +49,46 @@ export async function handleSearchFiles(
   caseSensitive: boolean = false
 ): Promise<ToolCallResult> {
   try {
-    const caseFlag = caseSensitive ? '' : '-i';
-    const includeFlag = filePattern ? `--include="${filePattern}"` : '';
+    let command: string;
+    let useRipgrep = false;
 
-    // Exclude common build/dependency directories to avoid massive output
-    const excludeDirs = [
-      'node_modules',
-      'dist',
-      'build',
-      '.next',
-      '.git',
-      'coverage',
-      '.turbo',
-      '.cache',
-      'out',
-      '.vercel',
-      '*.tsbuildinfo'
-    ].map(dir => `--exclude-dir=${dir}`).join(' ');
+    // Check if ripgrep is available (faster, smarter search)
+    try {
+      await execAsync('which rg', { cwd: projectRoot, timeout: 1000 });
+      useRipgrep = true;
+    } catch {
+      // ripgrep not available, will use grep fallback
+    }
 
-    // Use grep to search with exclusions, limit to 10 results for token efficiency
-    const command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n "${pattern}" . 2>/dev/null | head -n 10`;
+    if (useRipgrep) {
+      // Ripgrep: 10-50x faster, respects .gitignore, skips binary files automatically
+      const caseFlagRg = caseSensitive ? '--case-sensitive' : '--ignore-case';
+      const includeFlagRg = filePattern ? `--glob "${filePattern}"` : '';
+      command = `rg ${caseFlagRg} ${includeFlagRg} --line-number --context 1 --max-count 30 "${pattern}" . 2>/dev/null`;
+      logger.debug(`Using ripgrep for search: ${pattern}`);
+    } else {
+      // Grep fallback: works everywhere
+      const caseFlag = caseSensitive ? '' : '-i';
+      const includeFlag = filePattern ? `--include="${filePattern}"` : '';
+
+      // Exclude common build/dependency directories
+      const excludeDirs = [
+        'node_modules',
+        'dist',
+        'build',
+        '.next',
+        '.git',
+        'coverage',
+        '.turbo',
+        '.cache',
+        'out',
+        '.vercel',
+        '*.tsbuildinfo'
+      ].map(dir => `--exclude-dir=${dir}`).join(' ');
+
+      command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n -B 1 -A 1 "${pattern}" . 2>/dev/null | head -n 30`;
+      logger.debug(`Using grep for search: ${pattern}`);
+    }
 
     const { stdout, stderr } = await execAsync(command, {
       cwd: projectRoot,
@@ -78,22 +98,22 @@ export async function handleSearchFiles(
     if (stderr && !stdout) {
       return {
         success: false,
-        error: 'No matches' // Compressed error
+        error: 'No matches'
       };
     }
 
     const result = stdout.trim() || 'No matches found';
     const lines = result.split('\n');
-    const limitedResult = lines.length > 10 ? lines.slice(0, 10).join('\n') + '\n[...more]' : result;
+    const limitedResult = lines.length > 30 ? lines.slice(0, 30).join('\n') + '\n[...more]' : result;
 
-    logger.debug(`Search for "${pattern}" found ${lines.length} results (showing up to 10)`);
+    logger.debug(`Search for "${pattern}" found ${lines.length} results (showing up to 30)`);
 
     return {
       success: true,
       result: `Search results for "${pattern}":\n\n${limitedResult}`
     };
   } catch (error: any) {
-    // grep returns exit code 1 when no matches found
+    // grep/rg returns exit code 1 when no matches found
     if (error.code === 1) {
       return {
         success: true,
@@ -106,14 +126,14 @@ export async function handleSearchFiles(
       logger.debug(`Search output too large for pattern: ${pattern}`);
       return {
         success: false,
-        error: 'Too many results' // Compressed
+        error: 'Too many results'
       };
     }
 
     logger.debug(`Error searching files:`, error);
     return {
       success: false,
-      error: 'Search failed' // Compressed
+      error: 'Search failed'
     };
   }
 }

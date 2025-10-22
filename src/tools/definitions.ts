@@ -81,7 +81,7 @@ export const tools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'web_search',
-      description: 'Search the web for current information, documentation, or answers. Use this when you need information not available in the codebase, or when user asks to search the web.',
+      description: 'Search the web for CURRENT best practices, documentation, security advisories, and framework updates. Use this PROACTIVELY when: implementing features with dependencies, validating architectural decisions, checking for breaking changes, or researching latest patterns. Critical for Next.js/React/framework evolution and security best practices.',
       parameters: {
         type: 'object',
         properties: {
@@ -98,7 +98,7 @@ export const tools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_code_context',
-      description: 'Search for code examples, API documentation, and library usage from the web. Use this when you need examples for specific APIs, libraries, or frameworks.',
+      description: 'Get production-quality code examples, API docs, and battle-tested patterns for ANY library/framework feature. Use BEFORE suggesting implementations for: authentication, database operations, API integrations, state management, payment processing, or ANY external library. Returns real-world patterns, common pitfalls, and current best practices.',
       parameters: {
         type: 'object',
         properties: {

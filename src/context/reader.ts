@@ -9,9 +9,9 @@ export async function readProjectStructure(rootPath: string): Promise<string> {
     logger.info('Scanning project structure...');
     const files = await glob('**/*', {
       cwd: rootPath,
-      ignore: ['node_modules/**', 'dist/**', '.git/**', '*.log', '.cengine/**'],
+      ignore: ['node_modules/**', 'dist/**', '.git/**', '*.log', '.cengine/**', 'build/**', '.next/**', 'coverage/**'],
       nodir: true,
-      maxDepth: 3
+      maxDepth: 6
     });
 
     console.log(chalk.gray(`  Found ${files.length} files`));
