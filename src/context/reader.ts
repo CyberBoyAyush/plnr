@@ -1,21 +1,54 @@
 import fs from 'fs/promises';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { glob } from 'glob';
 import { FileInfo } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
 
+const execAsync = promisify(exec);
+
+const IGNORE_PATTERNS = [
+  'node_modules/**',
+  'dist/**',
+  '.git/**',
+  '*.log',
+  '.cengine/**',
+  'build/**',
+  '.next/**',
+  'coverage/**',
+  '.turbo/**',
+  '.cache/**',
+  'out/**',
+  '*.tsbuildinfo'
+];
+
 export async function readProjectStructure(rootPath: string): Promise<string> {
   try {
     logger.info('Scanning project structure...');
-    const files = await glob('**/*', {
-      cwd: rootPath,
-      ignore: ['node_modules/**', 'dist/**', '.git/**', '*.log', '.cengine/**', 'build/**', '.next/**', 'coverage/**'],
-      nodir: true,
-      maxDepth: 6
-    });
+    
+    // Try rg --files for fast listing
+    try {
+      const { stdout } = await execAsync('rg --files', {
+        cwd: rootPath,
+        maxBuffer: 1024 * 1024 * 10,
+        timeout: 5000
+      });
+      const files = stdout.trim().split('\n').filter(f => f);
+      console.log(chalk.gray(`  Found ${files.length} files`));
+      return files.join('\n');
+    } catch {
+      // Fallback to glob
+      const files = await glob('**/*', {
+        cwd: rootPath,
+        ignore: IGNORE_PATTERNS,
+        nodir: true,
+        maxDepth: 6
+      });
 
-    console.log(chalk.gray(`  Found ${files.length} files`));
-    return files.join('\n');
+      console.log(chalk.gray(`  Found ${files.length} files`));
+      return files.join('\n');
+    }
   } catch (error) {
     logger.error('Error reading project structure:', error);
     return '';

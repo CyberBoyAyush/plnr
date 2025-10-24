@@ -42,6 +42,111 @@ export async function handleReadFile(filePath: string, projectRoot: string): Pro
   }
 }
 
+// Shared ignore patterns for consistency
+const IGNORE_PATTERNS = [
+  'node_modules/**',
+  'dist/**',
+  'build/**',
+  '.git/**',
+  '.next/**',
+  'coverage/**',
+  '.turbo/**',
+  '.cache/**',
+  'out/**',
+  '*.tsbuildinfo'
+];
+
+// Default code file extensions for JS/TS projects
+const CODE_EXTENSIONS = '*.{ts,tsx,js,jsx,mjs,cjs}';
+
+interface SearchMatch {
+  file: string;
+  line: number;
+  text: string;
+}
+
+function rankFiles(files: string[]): string[] {
+  const extPriority: Record<string, number> = {
+    '.ts': 1, '.tsx': 2, '.js': 3, '.jsx': 4, '.mjs': 5, '.cjs': 6
+  };
+  
+  return files.sort((a, b) => {
+    const extA = a.substring(a.lastIndexOf('.'));
+    const extB = b.substring(b.lastIndexOf('.'));
+    const priorityA = extPriority[extA] || 99;
+    const priorityB = extPriority[extB] || 99;
+    
+    if (priorityA !== priorityB) return priorityA - priorityB;
+    
+    const depthA = a.split('/').length;
+    const depthB = b.split('/').length;
+    return depthA - depthB;
+  });
+}
+
+function formatGroupedResults(matches: SearchMatch[], maxFiles: number = 8, maxHitsPerFile: number = 2): string {
+  if (matches.length === 0) return 'No matches found';
+  
+  const byFile = new Map<string, SearchMatch[]>();
+  for (const match of matches) {
+    if (!byFile.has(match.file)) byFile.set(match.file, []);
+    byFile.get(match.file)!.push(match);
+  }
+  
+  const rankedFiles = rankFiles(Array.from(byFile.keys())).slice(0, maxFiles);
+  const parts: string[] = [];
+  
+  for (const file of rankedFiles) {
+    const fileMatches = byFile.get(file)!.slice(0, maxHitsPerFile);
+    parts.push(file);
+    for (const m of fileMatches) {
+      parts.push(`  ${m.line}: ${m.text.trim()}`);
+    }
+  }
+  
+  return parts.join('\n');
+}
+
+async function nodeFallbackSearch(
+  pattern: string,
+  projectRoot: string,
+  filePattern: string,
+  caseSensitive: boolean
+): Promise<SearchMatch[]> {
+  const matches: SearchMatch[] = [];
+  const files = await glob(filePattern, {
+    cwd: projectRoot,
+    ignore: IGNORE_PATTERNS,
+    absolute: false
+  });
+  
+  const regex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+  let fileCount = 0;
+  
+  for (const file of files) {
+    if (fileCount >= 8) break;
+    
+    try {
+      const content = await readFile(join(projectRoot, file), 'utf-8');
+      const lines = content.split('\n');
+      let hitCount = 0;
+      
+      for (let i = 0; i < lines.length && hitCount < 2; i++) {
+        if (regex.test(lines[i])) {
+          matches.push({ file, line: i + 1, text: lines[i] });
+          hitCount++;
+        }
+      }
+      
+      if (hitCount > 0) fileCount++;
+    } catch {
+      continue;
+    }
+  }
+  
+  return matches;
+}
+
 export async function handleSearchFiles(
   pattern: string,
   projectRoot: string,
@@ -51,69 +156,81 @@ export async function handleSearchFiles(
   try {
     let command: string;
     let useRipgrep = false;
+    let useGrep = false;
 
-    // Check if ripgrep is available (faster, smarter search)
+    // Check ripgrep (cross-platform: rg --version works everywhere)
     try {
-      await execAsync('which rg', { cwd: projectRoot, timeout: 1000 });
+      await execAsync('rg --version', { cwd: projectRoot, timeout: 1000 });
       useRipgrep = true;
     } catch {
-      // ripgrep not available, will use grep fallback
+      // Try grep
+      try {
+        await execAsync('grep --version', { cwd: projectRoot, timeout: 1000 });
+        useGrep = true;
+      } catch {
+        // Node fallback for Windows without grep
+      }
     }
+
+    const defaultGlob = filePattern || CODE_EXTENSIONS;
 
     if (useRipgrep) {
-      // Ripgrep: 10-50x faster, respects .gitignore, skips binary files automatically
-      const caseFlagRg = caseSensitive ? '--case-sensitive' : '--ignore-case';
-      const includeFlagRg = filePattern ? `--glob "${filePattern}"` : '';
-      command = `rg ${caseFlagRg} ${includeFlagRg} --line-number --context 1 --max-count 30 "${pattern}" . 2>/dev/null`;
+      const caseFlagRg = caseSensitive ? '--case-sensitive' : '--smart-case';
+      const includeFlagRg = `--glob "${defaultGlob}"`;
+      command = `rg ${caseFlagRg} ${includeFlagRg} --line-number --no-heading --color=never --max-count 100 "${pattern}" . 2>/dev/null`;
       logger.debug(`Using ripgrep for search: ${pattern}`);
-    } else {
-      // Grep fallback: works everywhere
-      const caseFlag = caseSensitive ? '' : '-i';
-      const includeFlag = filePattern ? `--include="${filePattern}"` : '';
-
-      // Exclude common build/dependency directories
-      const excludeDirs = [
-        'node_modules',
-        'dist',
-        'build',
-        '.next',
-        '.git',
-        'coverage',
-        '.turbo',
-        '.cache',
-        'out',
-        '.vercel',
-        '*.tsbuildinfo'
-      ].map(dir => `--exclude-dir=${dir}`).join(' ');
-
-      command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n -B 1 -A 1 "${pattern}" . 2>/dev/null | head -n 30`;
+    } else if (useGrep) {
+      const hasUpperCase = /[A-Z]/.test(pattern);
+      const caseFlag = caseSensitive || hasUpperCase ? '' : '-i';
+      const includeFlag = `--include="${defaultGlob}"`;
+      const excludeDirs = IGNORE_PATTERNS.filter(p => !p.includes('*'))
+        .map(dir => `--exclude-dir=${dir.replace('/**', '')}`).join(' ');
+      
+      command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n "${pattern}" . 2>/dev/null | head -n 200`;
       logger.debug(`Using grep for search: ${pattern}`);
-    }
-
-    const { stdout, stderr } = await execAsync(command, {
-      cwd: projectRoot,
-      maxBuffer: 1024 * 1024 * 5 // 5MB max buffer
-    });
-
-    if (stderr && !stdout) {
+    } else {
+      // Node fallback
+      logger.debug(`Using Node fallback for search: ${pattern}`);
+      const matches = await nodeFallbackSearch(pattern, projectRoot, defaultGlob, caseSensitive);
       return {
-        success: false,
-        error: 'No matches'
+        success: true,
+        result: `Search results for "${pattern}":\n\n${formatGroupedResults(matches)}`
       };
     }
 
-    const result = stdout.trim() || 'No matches found';
-    const lines = result.split('\n');
-    const limitedResult = lines.length > 30 ? lines.slice(0, 30).join('\n') + '\n[...more]' : result;
+    const { stdout } = await execAsync(command, {
+      cwd: projectRoot,
+      maxBuffer: 1024 * 1024 * 5
+    });
 
-    logger.debug(`Search for "${pattern}" found ${lines.length} results (showing up to 30)`);
+    if (!stdout.trim()) {
+      return {
+        success: true,
+        result: `Search results for "${pattern}":\n\nNo matches found`
+      };
+    }
+
+    // Parse output into structured matches
+    const matches: SearchMatch[] = [];
+    for (const line of stdout.trim().split('\n')) {
+      const match = line.match(/^([^:]+):(\d+):(.+)$/);
+      if (match) {
+        matches.push({
+          file: match[1],
+          line: parseInt(match[2], 10),
+          text: match[3]
+        });
+      }
+    }
+
+    const result = formatGroupedResults(matches);
+    logger.debug(`Search for "${pattern}" found ${matches.length} results`);
 
     return {
       success: true,
-      result: `Search results for "${pattern}":\n\n${limitedResult}`
+      result: `Search results for "${pattern}":\n\n${result}`
     };
   } catch (error: any) {
-    // grep/rg returns exit code 1 when no matches found
     if (error.code === 1) {
       return {
         success: true,
@@ -121,13 +238,25 @@ export async function handleSearchFiles(
       };
     }
 
-    // Handle buffer overflow error gracefully
     if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
       logger.debug(`Search output too large for pattern: ${pattern}`);
       return {
         success: false,
         error: 'Too many results'
       };
+    }
+
+    // Final fallback to Node if command execution failed
+    if (error.code === 'ENOENT') {
+      try {
+        const matches = await nodeFallbackSearch(pattern, projectRoot, filePattern || CODE_EXTENSIONS, caseSensitive);
+        return {
+          success: true,
+          result: `Search results for "${pattern}":\n\n${formatGroupedResults(matches)}`
+        };
+      } catch {
+        return { success: false, error: 'Search failed' };
+      }
     }
 
     logger.debug(`Error searching files:`, error);
@@ -142,7 +271,7 @@ export async function handleListFiles(path: string, projectRoot: string): Promis
   try {
     const files = await glob(path, {
       cwd: projectRoot,
-      ignore: ['node_modules/**', '.git/**', 'dist/**', '**/*.test.*'],
+      ignore: IGNORE_PATTERNS.concat(['**/*.test.*']),
       absolute: false
     });
 
