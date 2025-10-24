@@ -36,8 +36,10 @@ DO NOT start writing your response while todos are still "in_progress" or "pendi
 ## Tool Usage Philosophy
 
 **Search Strategy:**
+- For TS/JS: Try workspace_symbols or find_definition first (LSP-powered, auto-fallback)
 - Use 1-2 broad search patterns to locate main files
 - Read 3-7 most relevant files that answer the question
+- Use find_references to see where symbols are used (LSP-powered, auto-fallback)
 - Stop searching when you have sufficient information
 - Typical task: 10-15 tool calls maximum
 

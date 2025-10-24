@@ -103,7 +103,7 @@ export async function generatePlan(
 
           // Handle todo tools specially
           if (toolName === 'create_todos') {
-            const result = await executeToolCall(toolName, args, context.projectRoot, sessionId);
+            const result = await executeToolCall(toolName, args, context.projectRoot, sessionId, abortSignal);
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -118,7 +118,7 @@ export async function generatePlan(
           }
           
           if (toolName === 'update_todo') {
-            const result = await executeToolCall(toolName, args, context.projectRoot, sessionId);
+            const result = await executeToolCall(toolName, args, context.projectRoot, sessionId, abortSignal);
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -133,9 +133,9 @@ export async function generatePlan(
           }
           
           // Show minimal tool usage for other tools
-          const displayArg = args.file_path || args.pattern || args.path || args.command || '';
+          const displayArg = args.file_path || args.pattern || args.path || args.command || args.query || '';
           process.stdout.write(chalk.gray(`  ${toolName}(${displayArg}) `));
-          const result = await executeToolCall(toolName, args, context.projectRoot, sessionId);
+          const result = await executeToolCall(toolName, args, context.projectRoot, sessionId, abortSignal);
           
           messages.push({
             role: 'tool',

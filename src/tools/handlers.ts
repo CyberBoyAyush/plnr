@@ -6,6 +6,7 @@ import { glob } from 'glob';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { todoManager, Todo } from '../utils/todo-manager.js';
+import { getLspClient, toAbsolutePath, uriToPath } from '../lsp/manager.js';
 
 const execAsync = promisify(exec);
 
@@ -453,11 +454,162 @@ export async function handleUpdateTodo(
   }
 }
 
+export async function handleFindDefinition(
+  file: string,
+  line: number,
+  character: number,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const absPath = toAbsolutePath(file, projectRoot);
+      const result = await lsp.definition(absPath, line, character);
+      
+      if (result && Array.isArray(result) && result.length > 0) {
+        const def = result[0];
+        const defPath = uriToPath(def.uri);
+        const relativePath = defPath.replace(projectRoot + '/', '');
+        return {
+          success: true,
+          result: `Definition at ${relativePath}:${def.range.start.line + 1}`
+        };
+      }
+    }
+    
+    // Fallback to search
+    const content = await readFile(toAbsolutePath(file, projectRoot), 'utf-8');
+    const lines = content.split('\n');
+    const symbolLine = lines[line] || '';
+    const symbolMatch = symbolLine.substring(character).match(/^(\w+)/);
+    
+    if (symbolMatch) {
+      return handleSearchFiles(symbolMatch[1], projectRoot);
+    }
+    
+    return { success: false, error: 'Symbol not found' };
+  } catch (error: any) {
+    logger.debug('Error finding definition:', error);
+    return { success: false, error: 'Definition lookup failed' };
+  }
+}
+
+export async function handleFindReferences(
+  file: string,
+  line: number,
+  character: number,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const absPath = toAbsolutePath(file, projectRoot);
+      const result = await lsp.references(absPath, line, character);
+      
+      if (result && Array.isArray(result) && result.length > 0) {
+        const refs = result.slice(0, 10).map((ref: any) => {
+          const refPath = uriToPath(ref.uri);
+          const relativePath = refPath.replace(projectRoot + '/', '');
+          return `${relativePath}:${ref.range.start.line + 1}`;
+        });
+        return {
+          success: true,
+          result: `Found ${result.length} reference(s):\n${refs.join('\n')}`
+        };
+      }
+    }
+    
+    // Fallback to search
+    const content = await readFile(toAbsolutePath(file, projectRoot), 'utf-8');
+    const lines = content.split('\n');
+    const symbolLine = lines[line] || '';
+    const symbolMatch = symbolLine.substring(character).match(/^(\w+)/);
+    
+    if (symbolMatch) {
+      return handleSearchFiles(symbolMatch[1], projectRoot);
+    }
+    
+    return { success: true, result: 'No references found' };
+  } catch (error: any) {
+    logger.debug('Error finding references:', error);
+    return { success: false, error: 'References lookup failed' };
+  }
+}
+
+export async function handleGetDocumentSymbols(
+  file: string,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const absPath = toAbsolutePath(file, projectRoot);
+      const result = await lsp.documentSymbols(absPath);
+      
+      if (result && Array.isArray(result)) {
+        const symbols = result.slice(0, 20).map((sym: any) => {
+          const kind = sym.kind === 12 ? 'function' : sym.kind === 5 ? 'class' : 'symbol';
+          return `${sym.name} (${kind}) at line ${(sym.range?.start?.line || 0) + 1}`;
+        });
+        return {
+          success: true,
+          result: `Symbols in ${file}:\n${symbols.join('\n')}`
+        };
+      }
+    }
+    
+    // Fallback to read_file
+    return handleReadFile(file, projectRoot);
+  } catch (error: any) {
+    logger.debug('Error getting document symbols:', error);
+    return { success: false, error: 'Symbol lookup failed' };
+  }
+}
+
+export async function handleWorkspaceSymbols(
+  query: string,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const result = await lsp.workspaceSymbols(query);
+      
+      if (result && Array.isArray(result) && result.length > 0) {
+        const symbols = result.slice(0, 10).map((sym: any) => {
+          const symPath = uriToPath(sym.location.uri);
+          const relativePath = symPath.replace(projectRoot + '/', '');
+          return `${sym.name} in ${relativePath}:${sym.location.range.start.line + 1}`;
+        });
+        return {
+          success: true,
+          result: `Found ${symbols.length} symbol(s):\n${symbols.join('\n')}`
+        };
+      }
+    }
+    
+    // Fallback to search
+    return handleSearchFiles(query, projectRoot);
+  } catch (error: any) {
+    logger.debug('Error workspace symbol search:', error);
+    return { success: false, error: 'Symbol search failed' };
+  }
+}
+
 export async function executeToolCall(
   toolName: string,
   args: any,
   projectRoot: string,
-  sessionId?: string
+  sessionId?: string,
+  signal?: AbortSignal
 ): Promise<ToolCallResult> {
   switch (toolName) {
     case 'read_file':
@@ -494,6 +646,30 @@ export async function executeToolCall(
         return { success: false, error: 'Missing required parameters: todo_id or status' };
       }
       return handleUpdateTodo(sessionId || 'default', args.todo_id, args.status);
+
+    case 'find_definition':
+      if (!args || args.file === undefined || args.line === undefined || args.character === undefined) {
+        return { success: false, error: 'Missing required parameters: file, line, character' };
+      }
+      return handleFindDefinition(args.file, args.line, args.character, projectRoot, signal);
+
+    case 'find_references':
+      if (!args || args.file === undefined || args.line === undefined || args.character === undefined) {
+        return { success: false, error: 'Missing required parameters: file, line, character' };
+      }
+      return handleFindReferences(args.file, args.line, args.character, projectRoot, signal);
+
+    case 'get_document_symbols':
+      if (!args || !args.file) {
+        return { success: false, error: 'Missing required parameter: file' };
+      }
+      return handleGetDocumentSymbols(args.file, projectRoot, signal);
+
+    case 'workspace_symbols':
+      if (!args || !args.query) {
+        return { success: false, error: 'Missing required parameter: query' };
+      }
+      return handleWorkspaceSymbols(args.query, projectRoot, signal);
 
     default:
       return {

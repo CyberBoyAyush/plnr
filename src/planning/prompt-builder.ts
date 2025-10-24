@@ -136,11 +136,13 @@ ${filesContext}
 # IMPORTANT: Search Current Project First
 
 Before suggesting ANY implementation:
-1. Use search_files to find similar patterns in THIS codebase
-2. Use read_file to understand existing implementations  
-3. Use list_files to explore related directories
-4. Prioritize MINIMAL changes that extend existing code
-5. Match the coding style and patterns already in use
+1. For TS/JS symbols: Try workspace_symbols or find_definition (LSP-powered, falls back to search)
+2. Use search_files to find similar patterns in THIS codebase
+3. Use read_file to understand existing implementations  
+4. Use list_files to explore related directories
+5. Use find_references to see symbol usage (LSP-powered, falls back to search)
+6. Prioritize MINIMAL changes that extend existing code
+7. Match the coding style and patterns already in use
 
 # Your Mission
 
