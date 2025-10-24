@@ -10,7 +10,7 @@ let globalLspClient: LspClient | null = null;
 let lspAvailable: boolean | null = null;
 
 async function detectTypeScriptLanguageServer(): Promise<string | null> {
-  // Try typescript-language-server in PATH
+  // Try global typescript-language-server first (user's preferred version)
   const commands = process.platform === 'win32' 
     ? ['typescript-language-server.cmd', 'typescript-language-server']
     : ['typescript-language-server'];
@@ -18,11 +18,31 @@ async function detectTypeScriptLanguageServer(): Promise<string | null> {
   for (const cmd of commands) {
     try {
       await execAsync(`${cmd} --version`, { timeout: 2000 });
-      logger.debug(`Found typescript-language-server: ${cmd}`);
+      logger.debug(`Found global typescript-language-server: ${cmd}`);
       return cmd;
     } catch {
       continue;
     }
+  }
+
+  // Try bundled typescript-language-server (installed with plnr)
+  try {
+    // Check in plnr's own node_modules (when installed globally or locally)
+    const { fileURLToPath } = await import('url');
+    const { dirname } = await import('path');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    
+    // Go up to plnr root: dist/lsp -> dist -> root
+    const plnrRoot = join(__dirname, '..', '..');
+    const bundledPath = join(plnrRoot, 'node_modules', '.bin', 'typescript-language-server');
+    const bundledPathWin = process.platform === 'win32' ? `${bundledPath}.cmd` : bundledPath;
+    
+    await execAsync(`"${bundledPathWin}" --version`, { timeout: 2000 });
+    logger.debug(`Found bundled typescript-language-server: ${bundledPathWin}`);
+    return bundledPathWin;
+  } catch {
+    // Bundled version not found
   }
 
   return null;
