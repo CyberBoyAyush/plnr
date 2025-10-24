@@ -2,30 +2,58 @@
 
 ## Overview
 
-plnr includes **optional** LSP (Language Server Protocol) support for TypeScript and JavaScript projects. This provides precise symbol navigation, type-aware context, and structural understanding of your codebase.
+plnr includes **built-in** LSP (Language Server Protocol) support for TypeScript and JavaScript projects. This provides precise symbol navigation, type-aware context, and structural understanding of your codebase.
 
 **Key Points:**
-- ✅ **Optional** - Works with or without `typescript-language-server`
-- ✅ **Automatic fallback** - Falls back to improved text search
+- ✅ **Included** - `typescript-language-server` bundled with plnr
+- ✅ **Works for JS & TS** - Both JavaScript and TypeScript supported
+- ✅ **Automatic fallback** - Falls back to improved text search if needed
 - ✅ **Cross-platform** - macOS, Linux, Windows
-- ✅ **Zero breaking changes** - Purely additive
+- ✅ **Zero setup** - Just install plnr and it works
 
 ---
 
-## Installation (Optional)
+## Installation
+
+**✅ INCLUDED OUT OF THE BOX!**
+
+`typescript-language-server` is now **bundled with plnr** - no manual installation needed!
+
+### Detection Priority
+
+1. **Global installation** (if you have it): Uses your version first
+2. **Bundled version** (always available): Falls back to this
+3. **Text search fallback**: If both fail (extremely rare)
+
+### Optional: Use Your Own Version
+
+To use a specific version globally:
 
 ```bash
-# Using npm
 npm install -g typescript-language-server
-
-# Using pnpm
+# or
 pnpm add -g typescript-language-server
-
-# Using yarn
+# or
 yarn global add typescript-language-server
 ```
 
-**Note**: If not installed, plnr automatically uses text-based search. All features work either way.
+plnr will prefer your global version over the bundled one.
+
+---
+
+## Supported Files
+
+**LSP works on:**
+- ✅ `.js` - JavaScript
+- ✅ `.jsx` - JavaScript with JSX (React)
+- ✅ `.ts` - TypeScript
+- ✅ `.tsx` - TypeScript with JSX (React)
+- ✅ `.mjs` - JavaScript modules
+- ✅ `.cjs` - CommonJS modules
+
+**Other languages use improved text search:**
+- Python, Go, Rust, Java, C/C++, etc. still work great with text search fallback
+- Mixed projects (e.g., JS + Python) work seamlessly - LSP for JS, search for Python
 
 ---
 
@@ -33,18 +61,22 @@ yarn global add typescript-language-server
 
 ### 1. Find Definition (`find_definition`)
 - **What**: Locates exactly where a symbol (function, type, class) is defined
+- **Works on**: JS/TS files only
 - **Fallback**: Text search for the symbol name
 
 ### 2. Find References (`find_references`)
 - **What**: Finds all places where a symbol is used across the codebase
+- **Works on**: JS/TS files only
 - **Fallback**: Text search pattern matching
 
 ### 3. Document Symbols (`get_document_symbols`)
 - **What**: Lists all exported functions, types, and classes in a file
+- **Works on**: JS/TS files only
 - **Fallback**: Reads and returns the file content
 
 ### 4. Workspace Symbol Search (`workspace_symbols`)
 - **What**: Fuzzy search for symbols across the entire project
+- **Works on**: JS/TS files only
 - **Fallback**: Improved text search with code-only defaults
 
 ---

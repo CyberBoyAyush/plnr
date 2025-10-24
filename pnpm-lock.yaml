@@ -32,6 +32,9 @@ importers:
       ora:
         specifier: ^9.0.0
         version: 9.0.0
+      typescript-language-server:
+        specifier: ^4.3.0
+        version: 4.4.1
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -550,6 +553,11 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  typescript-language-server@4.4.1:
+    resolution: {integrity: sha512-vEvDw+cjY75afMN2rhx0z8sQtFDAUHoBniksBmB6NUZlDt0rEIwQq01VMiqyXFm9uZwcED2475cmDeXxoDHleg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -560,6 +568,20 @@ packages:
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
+  vscode-jsonrpc@5.0.1:
+    resolution: {integrity: sha512-JvONPptw3GAQGXlVV2utDcHx0BiY34FupW/kI6mZ5x06ER5DdPG/tXWMVHjTNULF5uKPOUUD0SaXg5QaubJL0A==}
+    engines: {node: '>=8.0.0 || >=10.0.0'}
+
+  vscode-jsonrpc@8.2.0:
+    resolution: {integrity: sha512-C+r0eKJUIfiDIfwJhria30+TYWPtuHJXHtI7J0YlOmKAo7ogxP20T0zxB7HZQIFhIyvoBPwWskjxrvAtfjyZfA==}
+    engines: {node: '>=14.0.0'}
+
+  vscode-languageserver-protocol@3.17.5:
+    resolution: {integrity: sha512-mb1bvRJN8SVznADSGWM9u/b07H7Ecg0I3OgXDuLdn307rl/J3A9YD6/eYOssqhecL27hK1IPZAsaqh00i/Jljg==}
+
+  vscode-languageserver-types@3.17.5:
+    resolution: {integrity: sha512-Ld1VelNuX9pdF39h2Hgaeb5hEZM2Z3jUrrMgWQAu82jMtZp7p3vJT3BzToKtZI7NgQssZje5o0zryOrhQvzQAg==}
 
   web-streams-polyfill@4.0.0-beta.3:
     resolution: {integrity: sha512-QW95TCTaHmsYfHDybGMwO5IJIM93I/6vTRk+daHTWFPhwh+C8Cg7j7XyKrwrj8Ib6vYXe0ocYNrmzY4xAAN6ug==}
@@ -1037,11 +1059,27 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
+  typescript-language-server@4.4.1:
+    dependencies:
+      vscode-jsonrpc: 5.0.1
+      vscode-languageserver-protocol: 3.17.5
+
   typescript@5.9.3: {}
 
   undici-types@5.26.5: {}
 
   undici-types@6.21.0: {}
+
+  vscode-jsonrpc@5.0.1: {}
+
+  vscode-jsonrpc@8.2.0: {}
+
+  vscode-languageserver-protocol@3.17.5:
+    dependencies:
+      vscode-jsonrpc: 8.2.0
+      vscode-languageserver-types: 3.17.5
+
+  vscode-languageserver-types@3.17.5: {}
 
   web-streams-polyfill@4.0.0-beta.3: {}
 
