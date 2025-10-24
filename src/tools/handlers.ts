@@ -6,6 +6,7 @@ import { glob } from 'glob';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { todoManager, Todo } from '../utils/todo-manager.js';
+import { getLspClient, toAbsolutePath, uriToPath } from '../lsp/manager.js';
 
 const execAsync = promisify(exec);
 
@@ -42,6 +43,111 @@ export async function handleReadFile(filePath: string, projectRoot: string): Pro
   }
 }
 
+// Shared ignore patterns for consistency
+const IGNORE_PATTERNS = [
+  'node_modules/**',
+  'dist/**',
+  'build/**',
+  '.git/**',
+  '.next/**',
+  'coverage/**',
+  '.turbo/**',
+  '.cache/**',
+  'out/**',
+  '*.tsbuildinfo'
+];
+
+// Default code file extensions for JS/TS projects
+const CODE_EXTENSIONS = '*.{ts,tsx,js,jsx,mjs,cjs}';
+
+interface SearchMatch {
+  file: string;
+  line: number;
+  text: string;
+}
+
+function rankFiles(files: string[]): string[] {
+  const extPriority: Record<string, number> = {
+    '.ts': 1, '.tsx': 2, '.js': 3, '.jsx': 4, '.mjs': 5, '.cjs': 6
+  };
+  
+  return files.sort((a, b) => {
+    const extA = a.substring(a.lastIndexOf('.'));
+    const extB = b.substring(b.lastIndexOf('.'));
+    const priorityA = extPriority[extA] || 99;
+    const priorityB = extPriority[extB] || 99;
+    
+    if (priorityA !== priorityB) return priorityA - priorityB;
+    
+    const depthA = a.split('/').length;
+    const depthB = b.split('/').length;
+    return depthA - depthB;
+  });
+}
+
+function formatGroupedResults(matches: SearchMatch[], maxFiles: number = 8, maxHitsPerFile: number = 2): string {
+  if (matches.length === 0) return 'No matches found';
+  
+  const byFile = new Map<string, SearchMatch[]>();
+  for (const match of matches) {
+    if (!byFile.has(match.file)) byFile.set(match.file, []);
+    byFile.get(match.file)!.push(match);
+  }
+  
+  const rankedFiles = rankFiles(Array.from(byFile.keys())).slice(0, maxFiles);
+  const parts: string[] = [];
+  
+  for (const file of rankedFiles) {
+    const fileMatches = byFile.get(file)!.slice(0, maxHitsPerFile);
+    parts.push(file);
+    for (const m of fileMatches) {
+      parts.push(`  ${m.line}: ${m.text.trim()}`);
+    }
+  }
+  
+  return parts.join('\n');
+}
+
+async function nodeFallbackSearch(
+  pattern: string,
+  projectRoot: string,
+  filePattern: string,
+  caseSensitive: boolean
+): Promise<SearchMatch[]> {
+  const matches: SearchMatch[] = [];
+  const files = await glob(filePattern, {
+    cwd: projectRoot,
+    ignore: IGNORE_PATTERNS,
+    absolute: false
+  });
+  
+  const regex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+  let fileCount = 0;
+  
+  for (const file of files) {
+    if (fileCount >= 8) break;
+    
+    try {
+      const content = await readFile(join(projectRoot, file), 'utf-8');
+      const lines = content.split('\n');
+      let hitCount = 0;
+      
+      for (let i = 0; i < lines.length && hitCount < 2; i++) {
+        if (regex.test(lines[i])) {
+          matches.push({ file, line: i + 1, text: lines[i] });
+          hitCount++;
+        }
+      }
+      
+      if (hitCount > 0) fileCount++;
+    } catch {
+      continue;
+    }
+  }
+  
+  return matches;
+}
+
 export async function handleSearchFiles(
   pattern: string,
   projectRoot: string,
@@ -49,51 +155,83 @@ export async function handleSearchFiles(
   caseSensitive: boolean = false
 ): Promise<ToolCallResult> {
   try {
-    const caseFlag = caseSensitive ? '' : '-i';
-    const includeFlag = filePattern ? `--include="${filePattern}"` : '';
+    let command: string;
+    let useRipgrep = false;
+    let useGrep = false;
 
-    // Exclude common build/dependency directories to avoid massive output
-    const excludeDirs = [
-      'node_modules',
-      'dist',
-      'build',
-      '.next',
-      '.git',
-      'coverage',
-      '.turbo',
-      '.cache',
-      'out',
-      '.vercel',
-      '*.tsbuildinfo'
-    ].map(dir => `--exclude-dir=${dir}`).join(' ');
+    // Check ripgrep (cross-platform: rg --version works everywhere)
+    try {
+      await execAsync('rg --version', { cwd: projectRoot, timeout: 1000 });
+      useRipgrep = true;
+    } catch {
+      // Try grep
+      try {
+        await execAsync('grep --version', { cwd: projectRoot, timeout: 1000 });
+        useGrep = true;
+      } catch {
+        // Node fallback for Windows without grep
+      }
+    }
 
-    // Use grep to search with exclusions, limit to 10 results for token efficiency
-    const command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n "${pattern}" . 2>/dev/null | head -n 10`;
+    const defaultGlob = filePattern || CODE_EXTENSIONS;
 
-    const { stdout, stderr } = await execAsync(command, {
-      cwd: projectRoot,
-      maxBuffer: 1024 * 1024 * 5 // 5MB max buffer
-    });
-
-    if (stderr && !stdout) {
+    if (useRipgrep) {
+      const caseFlagRg = caseSensitive ? '--case-sensitive' : '--smart-case';
+      const includeFlagRg = `--glob "${defaultGlob}"`;
+      command = `rg ${caseFlagRg} ${includeFlagRg} --line-number --no-heading --color=never --max-count 100 "${pattern}" . 2>/dev/null`;
+      logger.debug(`Using ripgrep for search: ${pattern}`);
+    } else if (useGrep) {
+      const hasUpperCase = /[A-Z]/.test(pattern);
+      const caseFlag = caseSensitive || hasUpperCase ? '' : '-i';
+      const includeFlag = `--include="${defaultGlob}"`;
+      const excludeDirs = IGNORE_PATTERNS.filter(p => !p.includes('*'))
+        .map(dir => `--exclude-dir=${dir.replace('/**', '')}`).join(' ');
+      
+      command = `grep -r ${caseFlag} ${includeFlag} ${excludeDirs} -n "${pattern}" . 2>/dev/null | head -n 200`;
+      logger.debug(`Using grep for search: ${pattern}`);
+    } else {
+      // Node fallback
+      logger.debug(`Using Node fallback for search: ${pattern}`);
+      const matches = await nodeFallbackSearch(pattern, projectRoot, defaultGlob, caseSensitive);
       return {
-        success: false,
-        error: 'No matches' // Compressed error
+        success: true,
+        result: `Search results for "${pattern}":\n\n${formatGroupedResults(matches)}`
       };
     }
 
-    const result = stdout.trim() || 'No matches found';
-    const lines = result.split('\n');
-    const limitedResult = lines.length > 10 ? lines.slice(0, 10).join('\n') + '\n[...more]' : result;
+    const { stdout } = await execAsync(command, {
+      cwd: projectRoot,
+      maxBuffer: 1024 * 1024 * 5
+    });
 
-    logger.debug(`Search for "${pattern}" found ${lines.length} results (showing up to 10)`);
+    if (!stdout.trim()) {
+      return {
+        success: true,
+        result: `Search results for "${pattern}":\n\nNo matches found`
+      };
+    }
+
+    // Parse output into structured matches
+    const matches: SearchMatch[] = [];
+    for (const line of stdout.trim().split('\n')) {
+      const match = line.match(/^([^:]+):(\d+):(.+)$/);
+      if (match) {
+        matches.push({
+          file: match[1],
+          line: parseInt(match[2], 10),
+          text: match[3]
+        });
+      }
+    }
+
+    const result = formatGroupedResults(matches);
+    logger.debug(`Search for "${pattern}" found ${matches.length} results`);
 
     return {
       success: true,
-      result: `Search results for "${pattern}":\n\n${limitedResult}`
+      result: `Search results for "${pattern}":\n\n${result}`
     };
   } catch (error: any) {
-    // grep returns exit code 1 when no matches found
     if (error.code === 1) {
       return {
         success: true,
@@ -101,19 +239,31 @@ export async function handleSearchFiles(
       };
     }
 
-    // Handle buffer overflow error gracefully
     if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
       logger.debug(`Search output too large for pattern: ${pattern}`);
       return {
         success: false,
-        error: 'Too many results' // Compressed
+        error: 'Too many results'
       };
+    }
+
+    // Final fallback to Node if command execution failed
+    if (error.code === 'ENOENT') {
+      try {
+        const matches = await nodeFallbackSearch(pattern, projectRoot, filePattern || CODE_EXTENSIONS, caseSensitive);
+        return {
+          success: true,
+          result: `Search results for "${pattern}":\n\n${formatGroupedResults(matches)}`
+        };
+      } catch {
+        return { success: false, error: 'Search failed' };
+      }
     }
 
     logger.debug(`Error searching files:`, error);
     return {
       success: false,
-      error: 'Search failed' // Compressed
+      error: 'Search failed'
     };
   }
 }
@@ -122,7 +272,7 @@ export async function handleListFiles(path: string, projectRoot: string): Promis
   try {
     const files = await glob(path, {
       cwd: projectRoot,
-      ignore: ['node_modules/**', '.git/**', 'dist/**', '**/*.test.*'],
+      ignore: IGNORE_PATTERNS.concat(['**/*.test.*']),
       absolute: false
     });
 
@@ -304,11 +454,162 @@ export async function handleUpdateTodo(
   }
 }
 
+export async function handleFindDefinition(
+  file: string,
+  line: number,
+  character: number,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const absPath = toAbsolutePath(file, projectRoot);
+      const result = await lsp.definition(absPath, line, character);
+      
+      if (result && Array.isArray(result) && result.length > 0) {
+        const def = result[0];
+        const defPath = uriToPath(def.uri);
+        const relativePath = defPath.replace(projectRoot + '/', '');
+        return {
+          success: true,
+          result: `Definition at ${relativePath}:${def.range.start.line + 1}`
+        };
+      }
+    }
+    
+    // Fallback to search
+    const content = await readFile(toAbsolutePath(file, projectRoot), 'utf-8');
+    const lines = content.split('\n');
+    const symbolLine = lines[line] || '';
+    const symbolMatch = symbolLine.substring(character).match(/^(\w+)/);
+    
+    if (symbolMatch) {
+      return handleSearchFiles(symbolMatch[1], projectRoot);
+    }
+    
+    return { success: false, error: 'Symbol not found' };
+  } catch (error: any) {
+    logger.debug('Error finding definition:', error);
+    return { success: false, error: 'Definition lookup failed' };
+  }
+}
+
+export async function handleFindReferences(
+  file: string,
+  line: number,
+  character: number,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const absPath = toAbsolutePath(file, projectRoot);
+      const result = await lsp.references(absPath, line, character);
+      
+      if (result && Array.isArray(result) && result.length > 0) {
+        const refs = result.slice(0, 10).map((ref: any) => {
+          const refPath = uriToPath(ref.uri);
+          const relativePath = refPath.replace(projectRoot + '/', '');
+          return `${relativePath}:${ref.range.start.line + 1}`;
+        });
+        return {
+          success: true,
+          result: `Found ${result.length} reference(s):\n${refs.join('\n')}`
+        };
+      }
+    }
+    
+    // Fallback to search
+    const content = await readFile(toAbsolutePath(file, projectRoot), 'utf-8');
+    const lines = content.split('\n');
+    const symbolLine = lines[line] || '';
+    const symbolMatch = symbolLine.substring(character).match(/^(\w+)/);
+    
+    if (symbolMatch) {
+      return handleSearchFiles(symbolMatch[1], projectRoot);
+    }
+    
+    return { success: true, result: 'No references found' };
+  } catch (error: any) {
+    logger.debug('Error finding references:', error);
+    return { success: false, error: 'References lookup failed' };
+  }
+}
+
+export async function handleGetDocumentSymbols(
+  file: string,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const absPath = toAbsolutePath(file, projectRoot);
+      const result = await lsp.documentSymbols(absPath);
+      
+      if (result && Array.isArray(result)) {
+        const symbols = result.slice(0, 20).map((sym: any) => {
+          const kind = sym.kind === 12 ? 'function' : sym.kind === 5 ? 'class' : 'symbol';
+          return `${sym.name} (${kind}) at line ${(sym.range?.start?.line || 0) + 1}`;
+        });
+        return {
+          success: true,
+          result: `Symbols in ${file}:\n${symbols.join('\n')}`
+        };
+      }
+    }
+    
+    // Fallback to read_file
+    return handleReadFile(file, projectRoot);
+  } catch (error: any) {
+    logger.debug('Error getting document symbols:', error);
+    return { success: false, error: 'Symbol lookup failed' };
+  }
+}
+
+export async function handleWorkspaceSymbols(
+  query: string,
+  projectRoot: string,
+  signal?: AbortSignal
+): Promise<ToolCallResult> {
+  try {
+    const lsp = await getLspClient(projectRoot, signal);
+    
+    if (lsp) {
+      const result = await lsp.workspaceSymbols(query);
+      
+      if (result && Array.isArray(result) && result.length > 0) {
+        const symbols = result.slice(0, 10).map((sym: any) => {
+          const symPath = uriToPath(sym.location.uri);
+          const relativePath = symPath.replace(projectRoot + '/', '');
+          return `${sym.name} in ${relativePath}:${sym.location.range.start.line + 1}`;
+        });
+        return {
+          success: true,
+          result: `Found ${symbols.length} symbol(s):\n${symbols.join('\n')}`
+        };
+      }
+    }
+    
+    // Fallback to search
+    return handleSearchFiles(query, projectRoot);
+  } catch (error: any) {
+    logger.debug('Error workspace symbol search:', error);
+    return { success: false, error: 'Symbol search failed' };
+  }
+}
+
 export async function executeToolCall(
   toolName: string,
   args: any,
   projectRoot: string,
-  sessionId?: string
+  sessionId?: string,
+  signal?: AbortSignal
 ): Promise<ToolCallResult> {
   switch (toolName) {
     case 'read_file':
@@ -345,6 +646,30 @@ export async function executeToolCall(
         return { success: false, error: 'Missing required parameters: todo_id or status' };
       }
       return handleUpdateTodo(sessionId || 'default', args.todo_id, args.status);
+
+    case 'find_definition':
+      if (!args || args.file === undefined || args.line === undefined || args.character === undefined) {
+        return { success: false, error: 'Missing required parameters: file, line, character' };
+      }
+      return handleFindDefinition(args.file, args.line, args.character, projectRoot, signal);
+
+    case 'find_references':
+      if (!args || args.file === undefined || args.line === undefined || args.character === undefined) {
+        return { success: false, error: 'Missing required parameters: file, line, character' };
+      }
+      return handleFindReferences(args.file, args.line, args.character, projectRoot, signal);
+
+    case 'get_document_symbols':
+      if (!args || !args.file) {
+        return { success: false, error: 'Missing required parameter: file' };
+      }
+      return handleGetDocumentSymbols(args.file, projectRoot, signal);
+
+    case 'workspace_symbols':
+      if (!args || !args.query) {
+        return { success: false, error: 'Missing required parameter: query' };
+      }
+      return handleWorkspaceSymbols(args.query, projectRoot, signal);
 
     default:
       return {

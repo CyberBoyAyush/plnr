@@ -81,7 +81,7 @@ export const tools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'web_search',
-      description: 'Search the web for current information, documentation, or answers. Use this when you need information not available in the codebase, or when user asks to search the web.',
+      description: 'Search the web for CURRENT best practices, documentation, security advisories, and framework updates. Use this PROACTIVELY when: implementing features with dependencies, validating architectural decisions, checking for breaking changes, or researching latest patterns. Critical for Next.js/React/framework evolution and security best practices.',
       parameters: {
         type: 'object',
         properties: {
@@ -98,7 +98,7 @@ export const tools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_code_context',
-      description: 'Search for code examples, API documentation, and library usage from the web. Use this when you need examples for specific APIs, libraries, or frameworks.',
+      description: 'Get production-quality code examples, API docs, and battle-tested patterns for ANY library/framework feature. Use BEFORE suggesting implementations for: authentication, database operations, API integrations, state management, payment processing, or ANY external library. Returns real-world patterns, common pitfalls, and current best practices.',
       parameters: {
         type: 'object',
         properties: {
@@ -166,6 +166,90 @@ export const tools: ChatCompletionTool[] = [
           }
         },
         required: ['todo_id', 'status']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_definition',
+      description: 'Find where a symbol is defined using LSP (TS/JS only). Use to locate exact definitions of functions, types, classes. Provide file path, line (0-indexed), and character position where symbol appears. Falls back to text search if LSP unavailable.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file: {
+            type: 'string',
+            description: 'File path containing the symbol'
+          },
+          line: {
+            type: 'number',
+            description: 'Line number (0-indexed)'
+          },
+          character: {
+            type: 'number',
+            description: 'Character position (0-indexed)'
+          }
+        },
+        required: ['file', 'line', 'character']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_references',
+      description: 'Find all references to a symbol using LSP. Use to see where a function/type/class is used across the codebase. Falls back to search_files if LSP unavailable.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file: {
+            type: 'string',
+            description: 'File path'
+          },
+          line: {
+            type: 'number',
+            description: 'Line number (0-indexed)'
+          },
+          character: {
+            type: 'number',
+            description: 'Character position (0-indexed)'
+          }
+        },
+        required: ['file', 'line', 'character']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_document_symbols',
+      description: 'List all symbols (functions, types, classes) in a file using LSP. Use to understand file API. Falls back to read_file if LSP unavailable.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file: {
+            type: 'string',
+            description: 'File path to analyze'
+          }
+        },
+        required: ['file']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'workspace_symbols',
+      description: 'Search for symbols across workspace using LSP fuzzy search. Use to find functions/types/classes by name. Falls back to search_files if LSP unavailable.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Symbol name (fuzzy match)'
+          }
+        },
+        required: ['query']
       }
     }
   }
